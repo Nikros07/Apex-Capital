@@ -325,14 +325,14 @@
 
     <!-- Verdict Tabs -->
     <div class="tabs">
-      <button class="tab-btn active" onclick="showTab('overview')">Overview</button>
-      <button class="tab-btn" onclick="showTab('technical')">Technical</button>
-      <button class="tab-btn" onclick="showTab('fundamental')">Fundamental</button>
-      <button class="tab-btn" onclick="showTab('research')">Research</button>
-      <button class="tab-btn" onclick="showTab('sentiment')">Sentiment</button>
-      <button class="tab-btn" onclick="showTab('risk')">Risk</button>
-      <button class="tab-btn" onclick="showTab('debate')">Debate</button>
-      <button class="tab-btn" onclick="showTab('dante')">Dante ⚠</button>
+      <button class="tab-btn active" onclick="showTab('overview',this)">Overview</button>
+      <button class="tab-btn" onclick="showTab('technical',this)">Technical</button>
+      <button class="tab-btn" onclick="showTab('fundamental',this)">Fundamental</button>
+      <button class="tab-btn" onclick="showTab('research',this)">Research</button>
+      <button class="tab-btn" onclick="showTab('sentiment',this)">Sentiment</button>
+      <button class="tab-btn" onclick="showTab('risk',this)">Risk</button>
+      <button class="tab-btn" onclick="showTab('debate',this)">Debate</button>
+      <button class="tab-btn" onclick="showTab('dante',this)">Dante ⚠</button>
     </div>
 
     <!-- OVERVIEW -->
@@ -688,6 +688,10 @@ function handleWsMsg(msg) {
     if (document.getElementById('page-reports').classList.contains('active')) loadReports();
     return;
   }
+
+  if (type === 'pong' || type === 'heartbeat') {
+    return; // Connection alive — silently ignore
+  }
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -706,11 +710,11 @@ function showPage(name) {
   if (name === 'dashboard') { refreshTrades(); }
 }
 
-function showTab(name) {
+function showTab(name, btn) {
   document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
   document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
   document.getElementById(`tab-${name}`).classList.add('active');
-  event.target.classList.add('active');
+  if (btn) btn.classList.add('active');
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -793,7 +797,7 @@ function renderTradesRow(t) {
     <td class="${pnl > 0 ? 'green' : pnl < 0 ? 'red' : 'dim'}">${action === 'SELL' ? fmtEurSign(pnl) : '—'}</td>
     <td><span class="dim">${t.close_reason || '—'}</span></td>
     <td class="amber">${t.rr_ratio ? t.rr_ratio.toFixed(2) : '—'}</td>
-    <td>${t.conviction ? '★'.repeat(Math.min(t.conviction, 5)) + '☆'.repeat(Math.max(0, 5 - (t.conviction||0))) : '—'}</td>
+    <td>${t.conviction ? '★'.repeat(Math.min(Math.round(t.conviction||0),5)) + '☆'.repeat(Math.max(0,5-Math.round(t.conviction||0))) : '—'}</td>
   </tr>`;
 }
 
@@ -812,6 +816,14 @@ function runAnalysis() {
     method: 'POST',
     headers: {'Content-Type': 'application/json'},
     body: JSON.stringify({ticker})
+  }).then(r => {
+    if (!r.ok) {
+      document.getElementById('analyze-status').textContent = 'Error starting analysis';
+      pushActivity('ERROR', `Failed to start analysis for ${ticker}`, 'red');
+    }
+  }).catch(err => {
+    document.getElementById('analyze-status').textContent = `Error: ${err.message}`;
+    pushActivity('ERROR', `Network error: ${err.message}`, 'red');
   });
 }
 
@@ -996,20 +1008,20 @@ function renderVerdictCard(result) {
   const marcus = comm.marcus || {};
   document.getElementById('debate-chat').innerHTML = `
     <div class="chat-msg chat-leo">
-      <div class="chat-speaker green">LEO — Bull Case <span style="color:var(--dim)">(Conviction: ${leo.conviction || '?'}/10)</span></div>
-      ${leo.argument || '—'}
+      <div class="chat-speaker green">LEO — Bull Case <span style="color:var(--dim)">(Conviction: ${esc(leo.conviction) || '?'}/10)</span></div>
+      <div>${esc(leo.argument) || '—'}</div>
       ${leo.upside_target ? `<div style="margin-top:6px;color:var(--green);font-size:11px">Upside Target: ${fmt(leo.upside_target)} EUR</div>` : ''}
     </div>
     <div class="chat-msg chat-nina">
-      <div class="chat-speaker red">NINA — Bear Case <span style="color:var(--dim)">(Conviction: ${nina.conviction || '?'}/10)</span></div>
-      ${nina.argument || '—'}
+      <div class="chat-speaker red">NINA — Bear Case <span style="color:var(--dim)">(Conviction: ${esc(nina.conviction) || '?'}/10)</span></div>
+      <div>${esc(nina.argument) || '—'}</div>
       ${nina.downside_target ? `<div style="margin-top:6px;color:var(--red);font-size:11px">Downside Target: ${fmt(nina.downside_target)} EUR</div>` : ''}
     </div>
     <div class="chat-msg chat-marcus">
-      <div class="chat-speaker amber">MARCUS — CIO Verdict <span style="color:var(--dim)">(Conviction: ${comm.conviction || '?'}/10)</span></div>
-      ${comm.reasoning || '—'}
-      <div style="margin-top:8px;color:var(--amber);font-style:italic;font-size:11px">"${comm.investment_principle || ''}"</div>
-      ${comm.override_reason ? `<div style="margin-top:6px;color:var(--red);font-size:11px">⚠ OVERRIDE: ${comm.override_reason}</div>` : ''}
+      <div class="chat-speaker amber">MARCUS — CIO Verdict <span style="color:var(--dim)">(Conviction: ${esc(comm.conviction) || '?'}/10)</span></div>
+      <div>${esc(comm.reasoning) || '—'}</div>
+      <div style="margin-top:8px;color:var(--amber);font-style:italic;font-size:11px">"${esc(comm.investment_principle) || ''}"</div>
+      ${comm.override_reason ? `<div style="margin-top:6px;color:var(--red);font-size:11px">⚠ OVERRIDE: ${esc(comm.override_reason)}</div>` : ''}
     </div>
   `;
 
@@ -1223,13 +1235,18 @@ function analyzeFromWatchlist(ticker) {
 async function addToWatchlist() {
   const ticker = document.getElementById('wl-input').value.trim().toUpperCase();
   if (!ticker) return;
-  await fetch('/api/watchlist', {
-    method: 'POST',
-    headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify({ticker})
-  });
-  document.getElementById('wl-input').value = '';
-  loadWatchlist();
+  try {
+    const r = await fetch('/api/watchlist', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ticker})
+    });
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    document.getElementById('wl-input').value = '';
+    loadWatchlist();
+  } catch(err) {
+    pushActivity('ERROR', `Could not add ${ticker}: ${err.message}`, 'red');
+  }
 }
 
 async function removeFromWatchlist(ticker) {
@@ -1256,7 +1273,7 @@ function renderCharts() {
   // Equity curve
   const ctx1 = document.getElementById('equity-chart')?.getContext('2d');
   if (ctx1) {
-    if (state.equityChart) state.equityChart.destroy();
+    if (state.equityChart) { state.equityChart.destroy(); state.equityChart = null; }
     const snapshots = state.snapshots;
     const labels = snapshots.map(s => fmtTimeShort(s.timestamp));
     const values = snapshots.map(s => parseFloat(s.total_value || 10000));
@@ -1328,7 +1345,8 @@ function renderCharts() {
 // ═══════════════════════════════════════════════════════════════
 function fmt(v) {
   if (v == null || v === '') return '—';
-  return parseFloat(v).toFixed(2);
+  const n = parseFloat(v);
+  return isNaN(n) ? '—' : n.toFixed(2);
 }
 function fmtEur(v) { return '€' + parseFloat(v || 0).toLocaleString('en', {minimumFractionDigits:2, maximumFractionDigits:2}); }
 function fmtEurSign(v) { const n = parseFloat(v||0); return (n >= 0 ? '+€' : '-€') + Math.abs(n).toFixed(2); }
@@ -1355,6 +1373,13 @@ function setTextCls(id, text, cls) {
   if (!el) return;
   el.textContent = text ?? '—';
   if (cls) el.className = cls;
+}
+
+function esc(str) {
+  if (!str) return '';
+  return String(str)
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+    .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
 }
 
 function signalCls(sig) {
@@ -1386,21 +1411,21 @@ function updateClock() {
   setInterval(updateClock, 1000);
   updateClock();
 
-  connectWS();
+  // Load initial data before connecting WebSocket to avoid race conditions
+  try {
+    const pr = await fetch('/api/portfolio');
+    state.portfolio = await pr.json();
+    renderDashboard();
+  } catch(_) {}
 
-  // Load portfolio
-  const pr = await fetch('/api/portfolio');
-  state.portfolio = await pr.json();
-  renderDashboard();
-
-  // Load trades
   await refreshTrades();
   await refreshSnapshots();
-
-  // Load watchlist
   await loadWatchlist();
 
-  // Enter key for analyze
+  // Connect WebSocket AFTER initial state is rendered
+  connectWS();
+
+  // Keyboard shortcuts
   document.getElementById('ticker-input').addEventListener('keydown', e => {
     if (e.key === 'Enter') runAnalysis();
   });

@@ -72,7 +72,10 @@ class BaseAgent:
                         return json.dumps({"error": f"API error {resp.status_code}"})
 
                     data = resp.json()
-                    return data["choices"][0]["message"]["content"].strip()
+                    choices = data.get("choices") or []
+                    if not choices:
+                        return json.dumps({"error": "empty choices in response"})
+                    return (choices[0].get("message") or {}).get("content", "").strip()
 
             except httpx.TimeoutException:
                 if attempt < max_retries - 1:

@@ -88,9 +88,7 @@ async def _daily_scan_job():
                     })
                 result = await _cio.run_pipeline(ticker)
                 if result.get("verdict") == "INVEST":
-                    from core.portfolio import PortfolioManager
-                    pm = PortfolioManager(_broadcast)
-                    await pm.execute_buy(ticker, result)
+                    await _portfolio_manager.execute_buy(ticker, result)
                 update_watchlist_signal(ticker, result.get("verdict", "WAIT"))
             else:
                 update_watchlist_signal(ticker, f"NEUTRAL_RSI{rsi:.0f}")

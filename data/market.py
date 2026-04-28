@@ -89,7 +89,9 @@ def compute_indicators(df: pd.DataFrame) -> dict:
     macd_signal = float(macd_ind.macd_signal().iloc[-1])
     macd_diff = float(macd_ind.macd_diff().iloc[-1])
 
-    atr_val = float(ta.volatility.AverageTrueRange(high, low, close, window=14).average_true_range().iloc[-1])
+    _atr_series = ta.volatility.AverageTrueRange(high, low, close, window=14).average_true_range()
+    atr_raw = _atr_series.iloc[-1]
+    atr_val = float(atr_raw) if not (atr_raw != atr_raw) else current_price * 0.02  # NaN fallback
 
     bb = ta.volatility.BollingerBands(close, window=20)
     bb_upper = float(bb.bollinger_hband().iloc[-1])

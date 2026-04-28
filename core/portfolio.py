@@ -114,7 +114,7 @@ class PortfolioManager:
 
         sale_value = shares * current_price
         pnl_eur = (current_price - entry_price) * shares
-        pnl_pct = (current_price - entry_price) / entry_price * 100
+        pnl_pct = (current_price - entry_price) / entry_price * 100 if entry_price > 0 else 0.0
 
         new_cash = float(portfolio.get("cash_eur", 0)) + sale_value
         del positions[ticker]

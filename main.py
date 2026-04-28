@@ -1,6 +1,7 @@
 import asyncio
 import json
 import os
+from contextlib import asynccontextmanager
 from typing import List
 
 from dotenv import load_dotenv
@@ -18,7 +19,41 @@ from utils.db import (
     init_db, remove_from_watchlist,
 )
 
-app = FastAPI(title="Apex Capital Management", version="1.0.0")
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # ── Startup ──────────────────────────────────────────────────────────────
+    init_db()
+
+    for ticker in os.getenv("WATCHLIST", "AAPL,TSLA,NVDA,MSFT,SPY").split(","):
+        t = ticker.strip().upper()
+        if t:
+            add_to_watchlist(t)
+
+    try:
+        from utils.key_manager import KeyManager
+        KeyManager.get_instance()
+    except ValueError as e:
+        print(f"[WARNING] {e}")
+
+    from core.scheduler import setup_scheduler
+    setup_scheduler(get_pm(), get_cio(), broadcast)
+
+    print("=" * 50)
+    print("  APEX CAPITAL MANAGEMENT — ONLINE")
+    print(f"  Portfolio: {get_portfolio().get('total_value', 10000):.2f} EUR")
+    print("=" * 50)
+
+    yield  # app runs here
+
+    # ── Shutdown ─────────────────────────────────────────────────────────────
+    from core.scheduler import get_scheduler
+    sched = get_scheduler()
+    if sched and sched.running:
+        sched.shutdown(wait=False)
+    print("[Apex] Shutdown complete.")
+
+
+app = FastAPI(title="Apex Capital Management", version="1.0.0", lifespan=lifespan)
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
 
@@ -77,35 +112,6 @@ def get_pm():
         from core.portfolio import PortfolioManager
         _portfolio_manager = PortfolioManager(broadcast)
     return _portfolio_manager
-
-
-# ─── Startup ─────────────────────────────────────────────────────────────────
-
-@app.on_event("startup")
-async def on_startup():
-    init_db()
-
-    # Seed watchlist from env
-    for ticker in os.getenv("WATCHLIST", "AAPL,TSLA,NVDA,MSFT,SPY").split(","):
-        t = ticker.strip().upper()
-        if t:
-            add_to_watchlist(t)
-
-    # Init KeyManager (validates keys exist)
-    try:
-        from utils.key_manager import KeyManager
-        KeyManager.get_instance()
-    except ValueError as e:
-        print(f"[WARNING] {e}")
-
-    # Start scheduler
-    from core.scheduler import setup_scheduler
-    setup_scheduler(get_pm(), get_cio(), broadcast)
-
-    print("=" * 50)
-    print("  APEX CAPITAL MANAGEMENT — ONLINE")
-    print(f"  Portfolio: {get_portfolio().get('total_value', 10000):.2f} EUR")
-    print("=" * 50)
 
 
 # ─── WebSocket ───────────────────────────────────────────────────────────────
