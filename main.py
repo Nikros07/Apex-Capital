@@ -138,6 +138,24 @@ async def websocket_endpoint(ws: WebSocket):
         ws_manager.disconnect(ws)
 
 
+# ─── Health check (Railway requires this) ────────────────────────────────────
+
+from datetime import datetime as _dt
+from fastapi.responses import JSONResponse
+
+@app.get("/health")
+async def health():
+    portfolio = get_portfolio()
+    return JSONResponse({
+        "status": "ok",
+        "version": "1.0.0",
+        "ts": _dt.utcnow().isoformat(),
+        "portfolio_value": portfolio.get("total_value", 0),
+        "cash": portfolio.get("cash_eur", 0),
+        "positions": len(portfolio.get("positions", {})),
+    })
+
+
 # ─── Static ──────────────────────────────────────────────────────────────────
 
 @app.get("/")

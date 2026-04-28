@@ -4,7 +4,10 @@ import os
 from datetime import datetime
 from contextlib import contextmanager
 
-DB_PATH = os.getenv("DB_PATH", "apex.db")
+# On Railway: set DB_PATH=/data/apex.db and mount a Volume at /data
+# Locally: defaults to apex.db in project root
+_DATA_DIR = "/data" if os.path.isdir("/data") else "."
+DB_PATH = os.getenv("DB_PATH", os.path.join(_DATA_DIR, "apex.db"))
 
 
 def init_db():
