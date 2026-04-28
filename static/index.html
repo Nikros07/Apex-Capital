@@ -1,0 +1,1413 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>APEX CAPITAL MANAGEMENT</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+  :root {
+    --bg: #060606; --bg2: #0d0d0d; --bg3: #141414; --bg4: #1a1a1a;
+    --border: #2a2a2a; --text: #e8e8e8; --dim: #888;
+    --green: #00d084; --red: #ff4466; --amber: #f5a623;
+    --blue: #4d9fff; --purple: #b06aff;
+    --font: 'Courier New', Courier, monospace;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { background: var(--bg); color: var(--text); font-family: var(--font);
+    font-size: 13px; height: 100%; overflow-x: hidden; }
+
+  /* ── TOP BAR ── */
+  #topbar {
+    background: var(--bg2); border-bottom: 1px solid var(--border);
+    padding: 0 20px; display: flex; align-items: center; gap: 30px;
+    height: 48px; position: sticky; top: 0; z-index: 100;
+  }
+  #logo { color: var(--amber); font-size: 15px; font-weight: bold;
+    letter-spacing: 2px; white-space: nowrap; }
+  #clock { color: var(--dim); font-size: 11px; margin-left: auto; }
+  #ws-status { width: 8px; height: 8px; border-radius: 50%; background: var(--red);
+    transition: background .3s; }
+
+  /* ── NAV ── */
+  nav { background: var(--bg3); border-bottom: 1px solid var(--border);
+    display: flex; gap: 0; position: sticky; top: 48px; z-index: 99; }
+  nav button {
+    background: none; border: none; color: var(--dim); cursor: pointer;
+    font-family: var(--font); font-size: 12px; letter-spacing: 1px;
+    padding: 10px 22px; text-transform: uppercase; border-bottom: 2px solid transparent;
+    transition: all .2s;
+  }
+  nav button:hover { color: var(--text); }
+  nav button.active { color: var(--amber); border-bottom-color: var(--amber); }
+
+  /* ── LAYOUT ── */
+  .page { display: none; padding: 20px; max-width: 1600px; margin: 0 auto; }
+  .page.active { display: block; }
+  .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; }
+  .grid-4 { display: grid; grid-template-columns: repeat(4,1fr); gap: 16px; }
+
+  /* ── CARDS ── */
+  .card { background: var(--bg2); border: 1px solid var(--border);
+    border-radius: 4px; padding: 16px; }
+  .card-title { color: var(--dim); font-size: 10px; letter-spacing: 2px;
+    text-transform: uppercase; margin-bottom: 10px; }
+  .big-num { font-size: 28px; font-weight: bold; line-height: 1; }
+  .sub-num { font-size: 12px; margin-top: 4px; }
+
+  /* ── TABLES ── */
+  table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  th { color: var(--dim); font-size: 10px; letter-spacing: 1px;
+    text-transform: uppercase; padding: 6px 8px; text-align: left;
+    border-bottom: 1px solid var(--border); }
+  td { padding: 7px 8px; border-bottom: 1px solid #111; }
+  tr:hover td { background: var(--bg3); }
+
+  /* ── COLORS ── */
+  .green { color: var(--green); }
+  .red { color: var(--red); }
+  .amber { color: var(--amber); }
+  .blue { color: var(--blue); }
+  .dim { color: var(--dim); }
+
+  /* ── TAGS ── */
+  .tag {
+    display: inline-block; padding: 2px 8px; border-radius: 3px;
+    font-size: 10px; letter-spacing: 1px; font-weight: bold;
+  }
+  .tag-buy { background: rgba(0,208,132,.15); color: var(--green); border: 1px solid rgba(0,208,132,.3); }
+  .tag-sell { background: rgba(255,68,102,.15); color: var(--red); border: 1px solid rgba(255,68,102,.3); }
+  .tag-neutral { background: rgba(136,136,136,.15); color: var(--dim); border: 1px solid #333; }
+  .tag-wait { background: rgba(245,166,35,.15); color: var(--amber); border: 1px solid rgba(245,166,35,.3); }
+  .tag-invest { background: rgba(0,208,132,.2); color: var(--green); border: 1px solid var(--green); font-size: 14px; padding: 4px 14px; }
+  .tag-pass { background: rgba(255,68,102,.2); color: var(--red); border: 1px solid var(--red); font-size: 14px; padding: 4px 14px; }
+  .tag-crit { background: rgba(255,68,102,.25); color: var(--red); border: 1px solid var(--red); }
+
+  /* ── ACTIVITY FEED ── */
+  #activity-feed { max-height: 340px; overflow-y: auto; }
+  .feed-item {
+    padding: 6px 0; border-bottom: 1px solid #111; display: flex; gap: 8px;
+    font-size: 11px; align-items: flex-start;
+  }
+  .feed-agent { color: var(--amber); min-width: 64px; font-weight: bold; }
+  .feed-msg { color: var(--text); flex: 1; }
+  .feed-ts { color: var(--dim); font-size: 10px; min-width: 58px; text-align: right; }
+
+  /* ── AGENT PROGRESS ── */
+  #agent-progress { display: none; }
+  .agent-row {
+    display: flex; align-items: center; gap: 10px; padding: 6px 0;
+    border-bottom: 1px solid #111; font-size: 12px;
+  }
+  .agent-name { min-width: 80px; color: var(--amber); font-weight: bold; }
+  .agent-status { color: var(--dim); flex: 1; }
+  .spinner { display: inline-block; animation: spin .8s linear infinite; }
+  @keyframes spin { from{transform:rotate(0deg)} to{transform:rotate(360deg)} }
+  .status-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+  .status-waiting { background: #333; }
+  .status-working { background: var(--amber); }
+  .status-done { background: var(--green); }
+  .status-error { background: var(--red); }
+
+  /* ── VERDICT CARD ── */
+  #verdict-card { display: none; }
+  .verdict-box {
+    border: 2px solid var(--border); border-radius: 6px; padding: 24px;
+    text-align: center; margin-bottom: 16px;
+  }
+  .verdict-box.invest { border-color: var(--green); background: rgba(0,208,132,.05); }
+  .verdict-box.pass { border-color: var(--red); background: rgba(255,68,102,.05); }
+  .verdict-box.wait { border-color: var(--amber); background: rgba(245,166,35,.05); }
+
+  /* ── TABS ── */
+  .tabs { display: flex; gap: 0; border-bottom: 1px solid var(--border); margin-bottom: 16px; }
+  .tab-btn { background: none; border: none; color: var(--dim); cursor: pointer;
+    font-family: var(--font); font-size: 11px; letter-spacing: 1px;
+    padding: 8px 16px; text-transform: uppercase; border-bottom: 2px solid transparent; }
+  .tab-btn.active { color: var(--amber); border-bottom-color: var(--amber); }
+  .tab-panel { display: none; }
+  .tab-panel.active { display: block; }
+
+  /* ── CONVICTION BAR ── */
+  .conv-bar { width: 100%; height: 4px; background: #222; border-radius: 2px; margin-top: 4px; }
+  .conv-fill { height: 100%; border-radius: 2px; background: var(--green); }
+
+  /* ── PROGRESS BAR for TP/SL ── */
+  .progress-bar { width: 100%; height: 6px; background: #222; border-radius: 3px;
+    position: relative; overflow: hidden; }
+  .progress-fill { height: 100%; border-radius: 3px; background: var(--green);
+    transition: width .3s; }
+
+  /* ── DEBATE CHAT ── */
+  .chat-msg { padding: 10px 14px; border-radius: 6px; margin-bottom: 10px; }
+  .chat-leo { background: rgba(0,208,132,.08); border-left: 3px solid var(--green); }
+  .chat-nina { background: rgba(255,68,102,.08); border-left: 3px solid var(--red); }
+  .chat-marcus { background: rgba(245,166,35,.08); border-left: 3px solid var(--amber); }
+  .chat-speaker { font-weight: bold; font-size: 11px; margin-bottom: 4px; }
+
+  /* ── INPUT ── */
+  input[type=text] {
+    background: var(--bg3); border: 1px solid var(--border); color: var(--text);
+    font-family: var(--font); font-size: 14px; padding: 10px 16px;
+    border-radius: 4px; outline: none; width: 200px;
+    text-transform: uppercase;
+  }
+  input[type=text]:focus { border-color: var(--amber); }
+  input[type=text]::placeholder { color: var(--dim); text-transform: none; }
+  button.btn {
+    background: var(--amber); border: none; color: #000; cursor: pointer;
+    font-family: var(--font); font-size: 12px; font-weight: bold;
+    letter-spacing: 1px; padding: 10px 20px; border-radius: 4px;
+    text-transform: uppercase; transition: opacity .2s;
+  }
+  button.btn:hover { opacity: .85; }
+  button.btn.red { background: var(--red); color: #fff; }
+  button.btn.ghost { background: transparent; border: 1px solid var(--border);
+    color: var(--dim); }
+  button.btn.ghost:hover { border-color: var(--amber); color: var(--amber); }
+
+  /* ── DANTE CARD ── */
+  .dante-card { border: 1px solid var(--red); background: rgba(255,68,102,.06);
+    border-radius: 6px; padding: 16px; margin-top: 16px; }
+  .dante-header { color: var(--red); font-weight: bold; font-size: 12px;
+    letter-spacing: 1px; margin-bottom: 8px; }
+
+  /* ── SENTIMENT GAUGE ── */
+  .gauge-bar { display: flex; height: 20px; border-radius: 3px; overflow: hidden;
+    margin: 8px 0; }
+  .gauge-bull { background: var(--green); display: flex; align-items: center;
+    justify-content: center; color: #000; font-size: 10px; font-weight: bold; }
+  .gauge-bear { background: var(--red); display: flex; align-items: center;
+    justify-content: center; color: #fff; font-size: 10px; font-weight: bold; }
+  .gauge-neutral { background: #444; display: flex; align-items: center;
+    justify-content: center; color: var(--dim); font-size: 10px; }
+
+  /* ── SCROLLBARS ── */
+  ::-webkit-scrollbar { width: 4px; height: 4px; }
+  ::-webkit-scrollbar-track { background: var(--bg); }
+  ::-webkit-scrollbar-thumb { background: #333; border-radius: 2px; }
+
+  /* ── MISC ── */
+  .section-title { color: var(--dim); font-size: 10px; letter-spacing: 2px;
+    text-transform: uppercase; margin: 20px 0 10px; border-bottom: 1px solid var(--border);
+    padding-bottom: 6px; }
+  .kv-row { display: flex; justify-content: space-between; padding: 5px 0;
+    border-bottom: 1px solid #111; font-size: 12px; }
+  .kv-key { color: var(--dim); }
+  .kv-val { font-weight: bold; }
+  .mt16 { margin-top: 16px; }
+  .mt8 { margin-top: 8px; }
+  .flex { display: flex; }
+  .gap8 { gap: 8px; }
+  .gap16 { gap: 16px; }
+  .align-center { align-items: center; }
+  .full { width: 100%; }
+</style>
+</head>
+<body>
+
+<!-- TOP BAR -->
+<div id="topbar">
+  <div id="logo">▲ APEX CAPITAL</div>
+  <div style="display:flex;gap:6px;align-items:center">
+    <div id="ws-status"></div>
+    <span id="ws-label" style="color:var(--dim);font-size:11px">DISCONNECTED</span>
+  </div>
+  <div id="portfolio-ticker" style="font-size:12px;display:flex;gap:20px"></div>
+  <div id="clock" style="color:var(--dim);font-size:11px;margin-left:auto"></div>
+</div>
+
+<!-- NAV -->
+<nav>
+  <button class="active" onclick="showPage('dashboard')">Dashboard</button>
+  <button onclick="showPage('analyze')">Analyze</button>
+  <button onclick="showPage('portfolio')">Portfolio</button>
+  <button onclick="showPage('reports')">Reports</button>
+  <button onclick="showPage('watchlist')">Watchlist</button>
+</nav>
+
+<!-- ═══════════════════════════════════════════════════════════════ -->
+<!-- PAGE: DASHBOARD -->
+<!-- ═══════════════════════════════════════════════════════════════ -->
+<div id="page-dashboard" class="page active">
+  <div class="grid-4" style="margin-bottom:16px">
+    <div class="card">
+      <div class="card-title">Portfolio Value</div>
+      <div class="big-num" id="d-total-value">€10,000.00</div>
+      <div class="sub-num dim">Starting capital: €10,000</div>
+    </div>
+    <div class="card">
+      <div class="card-title">Total P&amp;L</div>
+      <div class="big-num" id="d-pnl-eur">€0.00</div>
+      <div class="sub-num" id="d-pnl-pct">0.00%</div>
+    </div>
+    <div class="card">
+      <div class="card-title">Available Cash</div>
+      <div class="big-num" id="d-cash">€10,000.00</div>
+      <div class="sub-num dim" id="d-pos-count">0 positions open</div>
+    </div>
+    <div class="card">
+      <div class="card-title">Max Drawdown</div>
+      <div class="big-num red" id="d-drawdown">0.00%</div>
+      <div class="sub-num dim" id="d-peak">Peak: €10,000.00</div>
+    </div>
+  </div>
+
+  <div class="grid-2">
+    <!-- Open Positions -->
+    <div class="card">
+      <div class="card-title">Open Positions</div>
+      <table>
+        <thead><tr>
+          <th>Ticker</th><th>Shares</th><th>Entry</th>
+          <th>Current</th><th>P&amp;L</th><th>SL/TP</th><th></th>
+        </tr></thead>
+        <tbody id="positions-tbody">
+          <tr><td colspan="7" class="dim" style="text-align:center;padding:16px">No open positions</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Activity Feed -->
+    <div class="card">
+      <div class="card-title">Live Agent Activity</div>
+      <div id="activity-feed">
+        <div class="dim" style="text-align:center;padding:20px;font-size:11px">Awaiting activity...</div>
+      </div>
+    </div>
+  </div>
+
+  <div style="margin-top:16px" class="card">
+    <div class="card-title">Recent Trades</div>
+    <table>
+      <thead><tr>
+        <th>Time</th><th>Ticker</th><th>Action</th><th>Shares</th>
+        <th>Price</th><th>Total</th><th>P&amp;L</th><th>Reason</th><th>Conviction</th>
+      </tr></thead>
+      <tbody id="trades-tbody">
+        <tr><td colspan="9" class="dim" style="text-align:center;padding:16px">No trades yet</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════ -->
+<!-- PAGE: ANALYZE -->
+<!-- ═══════════════════════════════════════════════════════════════ -->
+<div id="page-analyze" class="page">
+  <div class="card" style="margin-bottom:16px">
+    <div style="display:flex;gap:12px;align-items:center">
+      <input type="text" id="ticker-input" placeholder="Enter ticker (e.g. AAPL)" maxlength="10">
+      <button class="btn" onclick="runAnalysis()">▶ Run Analysis</button>
+      <span id="analyze-status" class="dim" style="font-size:11px"></span>
+    </div>
+  </div>
+
+  <!-- Agent Progress -->
+  <div id="agent-progress" class="card" style="margin-bottom:16px">
+    <div class="card-title">Pipeline Status</div>
+    <div id="agent-rows"></div>
+  </div>
+
+  <!-- Verdict Card -->
+  <div id="verdict-card" class="card" style="margin-bottom:16px">
+    <div id="verdict-box" class="verdict-box">
+      <div style="font-size:11px;color:var(--dim);letter-spacing:2px;margin-bottom:8px">COMMITTEE VERDICT</div>
+      <div id="verdict-tag" class="tag tag-neutral" style="font-size:18px;padding:6px 20px">---</div>
+      <div style="margin-top:12px">
+        <span id="verdict-ticker" style="font-size:20px;font-weight:bold"></span>
+        <span style="color:var(--dim)"> @ </span>
+        <span id="verdict-price" style="color:var(--amber);font-size:16px"></span>
+      </div>
+      <div style="margin-top:8px;color:var(--dim);font-size:11px" id="verdict-principle"></div>
+    </div>
+
+    <!-- Verdict Tabs -->
+    <div class="tabs">
+      <button class="tab-btn active" onclick="showTab('overview')">Overview</button>
+      <button class="tab-btn" onclick="showTab('technical')">Technical</button>
+      <button class="tab-btn" onclick="showTab('fundamental')">Fundamental</button>
+      <button class="tab-btn" onclick="showTab('research')">Research</button>
+      <button class="tab-btn" onclick="showTab('sentiment')">Sentiment</button>
+      <button class="tab-btn" onclick="showTab('risk')">Risk</button>
+      <button class="tab-btn" onclick="showTab('debate')">Debate</button>
+      <button class="tab-btn" onclick="showTab('dante')">Dante ⚠</button>
+    </div>
+
+    <!-- OVERVIEW -->
+    <div id="tab-overview" class="tab-panel active">
+      <div class="grid-2">
+        <div>
+          <div class="section-title">Decision</div>
+          <div class="kv-row"><span class="kv-key">Position Size</span><span class="kv-val green" id="ov-size">—</span></div>
+          <div class="kv-row"><span class="kv-key">Entry</span><span class="kv-val" id="ov-entry">—</span></div>
+          <div class="kv-row"><span class="kv-key">Stop Loss</span><span class="kv-val red" id="ov-sl">—</span></div>
+          <div class="kv-row"><span class="kv-key">Take Profit</span><span class="kv-val green" id="ov-tp">—</span></div>
+          <div class="kv-row"><span class="kv-key">Conviction</span>
+            <span class="kv-val" id="ov-conv">—</span>
+          </div>
+          <div class="kv-row"><span class="kv-key">High Uncertainty</span><span class="kv-val" id="ov-unc">—</span></div>
+        </div>
+        <div>
+          <div class="section-title">Agent Signals</div>
+          <div id="ov-signals"></div>
+        </div>
+      </div>
+      <div class="section-title mt16">Reasoning</div>
+      <div id="ov-reasoning" style="line-height:1.6;color:var(--text)"></div>
+    </div>
+
+    <!-- TECHNICAL -->
+    <div id="tab-technical" class="tab-panel">
+      <div class="grid-2">
+        <div>
+          <div class="section-title">Signal</div>
+          <div class="kv-row"><span class="kv-key">Signal</span><span class="kv-val" id="tech-signal">—</span></div>
+          <div class="kv-row"><span class="kv-key">Conviction</span><span class="kv-val" id="tech-conv">—</span></div>
+          <div class="kv-row"><span class="kv-key">Trend</span><span class="kv-val" id="tech-trend">—</span></div>
+          <div class="kv-row"><span class="kv-key">Pattern</span><span class="kv-val" id="tech-pattern">—</span></div>
+          <div class="kv-row"><span class="kv-key">EMA Cross</span><span class="kv-val" id="tech-cross">—</span></div>
+          <div class="section-title">Levels</div>
+          <div class="kv-row"><span class="kv-key">Support</span><span class="kv-val" id="tech-support">—</span></div>
+          <div class="kv-row"><span class="kv-key">Resistance</span><span class="kv-val" id="tech-resistance">—</span></div>
+          <div class="kv-row"><span class="kv-key">Entry Zone</span><span class="kv-val" id="tech-entry">—</span></div>
+          <div class="kv-row"><span class="kv-key">Stop Zone</span><span class="kv-val" id="tech-stop">—</span></div>
+        </div>
+        <div>
+          <div class="section-title">Indicators</div>
+          <div id="tech-indicators"></div>
+        </div>
+      </div>
+      <div class="section-title mt16">Thesis (Kai)</div>
+      <div id="tech-thesis" style="line-height:1.6"></div>
+    </div>
+
+    <!-- FUNDAMENTAL -->
+    <div id="tab-fundamental" class="tab-panel">
+      <div class="grid-2">
+        <div>
+          <div class="section-title">Valuation</div>
+          <div class="kv-row"><span class="kv-key">Signal</span><span class="kv-val" id="fund-signal">—</span></div>
+          <div class="kv-row"><span class="kv-key">Fair Value</span><span class="kv-val green" id="fund-fv">—</span></div>
+          <div class="kv-row"><span class="kv-key">Upside / Downside</span><span class="kv-val" id="fund-upside">—</span></div>
+          <div class="kv-row"><span class="kv-key">Moat Strength</span><span class="kv-val" id="fund-moat">—</span></div>
+          <div class="kv-row"><span class="kv-key">Valuation</span><span class="kv-val" id="fund-val">—</span></div>
+          <div class="kv-row"><span class="kv-key">Quality Score</span><span class="kv-val" id="fund-qual">—</span></div>
+          <div class="kv-row"><span class="kv-key">Key Risk</span><span class="kv-val red" id="fund-risk">—</span></div>
+        </div>
+        <div>
+          <div class="section-title">Financials</div>
+          <div id="fund-financials"></div>
+        </div>
+      </div>
+      <div class="section-title mt16">Thesis (Sophie)</div>
+      <div id="fund-thesis" style="line-height:1.6"></div>
+    </div>
+
+    <!-- RESEARCH -->
+    <div id="tab-research" class="tab-panel">
+      <div class="grid-2">
+        <div>
+          <div class="section-title">Summary</div>
+          <div id="res-summary" style="line-height:1.6;margin-bottom:12px"></div>
+          <div class="kv-row"><span class="kv-key">Sentiment Score</span><span class="kv-val" id="res-score">—</span></div>
+          <div class="kv-row"><span class="kv-key">Insider Activity</span><span class="kv-val" id="res-insider">—</span></div>
+          <div class="kv-row"><span class="kv-key">Short Interest</span><span class="kv-val" id="res-short">—</span></div>
+        </div>
+        <div>
+          <div class="section-title">Catalysts</div>
+          <ul id="res-catalysts" style="padding-left:16px;line-height:1.8;color:var(--green)"></ul>
+          <div class="section-title">Risks</div>
+          <ul id="res-risks" style="padding-left:16px;line-height:1.8;color:var(--red)"></ul>
+          <div class="section-title">Red Flags</div>
+          <ul id="res-flags" style="padding-left:16px;line-height:1.8;color:var(--amber)"></ul>
+        </div>
+      </div>
+    </div>
+
+    <!-- SENTIMENT -->
+    <div id="tab-sentiment" class="tab-panel">
+      <div class="grid-2">
+        <div>
+          <div class="section-title">Crowd Reading (Jordan)</div>
+          <div class="kv-row"><span class="kv-key">Crowd Sentiment</span><span class="kv-val" id="sent-crowd">—</span></div>
+          <div class="kv-row"><span class="kv-key">Crowd Conviction</span><span class="kv-val" id="sent-conv">—</span></div>
+          <div class="kv-row"><span class="kv-key">Contrarian Flag</span><span class="kv-val" id="sent-contra">—</span></div>
+          <div class="kv-row"><span class="kv-key">Meme Risk</span><span class="kv-val" id="sent-meme">—</span></div>
+          <div class="section-title">Narrative</div>
+          <div id="sent-narrative" style="line-height:1.6"></div>
+        </div>
+        <div>
+          <div class="section-title">StockTwits Gauge</div>
+          <div class="gauge-bar">
+            <div class="gauge-bull" id="gauge-bull" style="width:33%">BULL 33%</div>
+            <div class="gauge-neutral" id="gauge-neutral" style="width:34%">NEU 34%</div>
+            <div class="gauge-bear" id="gauge-bear" style="width:33%">BEAR 33%</div>
+          </div>
+          <div class="kv-row"><span class="kv-key">Total messages</span><span class="kv-val" id="st-count">—</span></div>
+          <div class="section-title">Top StockTwits Message</div>
+          <div id="st-top" style="background:var(--bg3);padding:10px;border-radius:4px;font-size:12px;line-height:1.5"></div>
+          <div class="section-title">Reddit Summary</div>
+          <div class="kv-row"><span class="kv-key">Total posts</span><span class="kv-val" id="reddit-total">—</span></div>
+          <div class="kv-row"><span class="kv-key">Bull mentions</span><span class="kv-val green" id="reddit-bull">—</span></div>
+          <div class="kv-row"><span class="kv-key">Bear mentions</span><span class="kv-val red" id="reddit-bear">—</span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- RISK -->
+    <div id="tab-risk" class="tab-panel">
+      <div class="grid-2">
+        <div>
+          <div class="section-title">Risk Metrics</div>
+          <div class="kv-row"><span class="kv-key">Risk Verdict</span><span class="kv-val" id="risk-verdict">—</span></div>
+          <div class="kv-row"><span class="kv-key">Position Size</span><span class="kv-val green" id="risk-size">—</span></div>
+          <div class="kv-row"><span class="kv-key">Shares</span><span class="kv-val" id="risk-shares">—</span></div>
+          <div class="kv-row"><span class="kv-key">Stop Loss</span><span class="kv-val red" id="risk-sl">—</span></div>
+          <div class="kv-row"><span class="kv-key">Take Profit</span><span class="kv-val green" id="risk-tp">—</span></div>
+          <div class="kv-row"><span class="kv-key">R/R Ratio</span><span class="kv-val amber" id="risk-rr">—</span></div>
+          <div class="kv-row"><span class="kv-key">Monthly Drawdown</span><span class="kv-val red" id="risk-dd">—</span></div>
+          <div class="kv-row"><span class="kv-key">Size Multiplier</span><span class="kv-val" id="risk-mult">—</span></div>
+        </div>
+        <div>
+          <div class="section-title">Viktor's Notes</div>
+          <ul id="risk-notes" style="padding-left:16px;line-height:1.9;color:var(--amber)"></ul>
+          <div class="section-title mt16">Assessment</div>
+          <div id="risk-summary" style="line-height:1.6;font-style:italic;color:var(--dim)"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- DEBATE -->
+    <div id="tab-debate" class="tab-panel">
+      <div id="debate-chat"></div>
+    </div>
+
+    <!-- DANTE -->
+    <div id="tab-dante" class="tab-panel">
+      <div id="dante-content">
+        <div class="dim" style="text-align:center;padding:20px">No INVEST verdict — Dante was not summoned.</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════ -->
+<!-- PAGE: PORTFOLIO -->
+<!-- ═══════════════════════════════════════════════════════════════ -->
+<div id="page-portfolio" class="page">
+  <div class="grid-2" style="margin-bottom:16px">
+    <div class="card">
+      <div class="card-title">Equity Curve</div>
+      <canvas id="equity-chart" height="180"></canvas>
+    </div>
+    <div class="card">
+      <div class="card-title">Win / Loss Breakdown</div>
+      <canvas id="winloss-chart" height="180"></canvas>
+    </div>
+  </div>
+  <div class="card">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+      <div class="card-title" style="margin-bottom:0">Trade History</div>
+      <div style="display:flex;gap:8px">
+        <select id="filter-action" onchange="renderTradesTable()"
+          style="background:var(--bg3);border:1px solid var(--border);color:var(--text);
+                 font-family:var(--font);padding:4px 10px;font-size:11px;cursor:pointer">
+          <option value="">All Actions</option>
+          <option>BUY</option>
+          <option>SELL</option>
+        </select>
+      </div>
+    </div>
+    <table>
+      <thead><tr>
+        <th>Time</th><th>Ticker</th><th>Action</th><th>Shares</th>
+        <th>Price</th><th>Total</th><th>P&amp;L</th><th>Close Reason</th>
+        <th>R/R</th><th>Conviction</th>
+      </tr></thead>
+      <tbody id="full-trades-tbody"></tbody>
+    </table>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════ -->
+<!-- PAGE: REPORTS -->
+<!-- ═══════════════════════════════════════════════════════════════ -->
+<div id="page-reports" class="page">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+    <h2 style="font-size:14px;color:var(--amber);letter-spacing:2px">MONTHLY REPORTS</h2>
+    <button class="btn ghost" onclick="generateReport()">Generate Now</button>
+  </div>
+  <div id="reports-list">
+    <div class="dim" style="text-align:center;padding:40px">No reports generated yet.</div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════ -->
+<!-- PAGE: WATCHLIST -->
+<!-- ═══════════════════════════════════════════════════════════════ -->
+<div id="page-watchlist" class="page">
+  <div class="card" style="margin-bottom:16px">
+    <div style="display:flex;gap:10px;align-items:center">
+      <input type="text" id="wl-input" placeholder="Add ticker..." maxlength="10">
+      <button class="btn" onclick="addToWatchlist()">+ Add</button>
+    </div>
+  </div>
+  <div class="card">
+    <div class="card-title">Watchlist</div>
+    <table>
+      <thead><tr>
+        <th>Ticker</th><th>Last Signal</th><th>Last Scan</th><th>Added</th><th></th>
+      </tr></thead>
+      <tbody id="watchlist-tbody"></tbody>
+    </table>
+  </div>
+</div>
+
+<script>
+// ═══════════════════════════════════════════════════════════════
+// STATE
+// ═══════════════════════════════════════════════════════════════
+const state = {
+  portfolio: null,
+  trades: [],
+  watchlist: [],
+  snapshots: [],
+  lastResult: null,
+  agentStates: {},
+  equityChart: null,
+  winlossChart: null,
+};
+
+const AGENTS = ['Elena','Kai','Sophie','Alex','Jordan','Viktor','Leo','Nina','Marcus','Dante'];
+
+// ═══════════════════════════════════════════════════════════════
+// WEBSOCKET
+// ═══════════════════════════════════════════════════════════════
+let ws, wsReconnectTimer;
+
+function connectWS() {
+  const proto = location.protocol === 'https:' ? 'wss' : 'ws';
+  ws = new WebSocket(`${proto}://${location.host}/ws`);
+
+  ws.onopen = () => {
+    document.getElementById('ws-status').style.background = 'var(--green)';
+    document.getElementById('ws-label').textContent = 'LIVE';
+  };
+
+  ws.onclose = () => {
+    document.getElementById('ws-status').style.background = 'var(--red)';
+    document.getElementById('ws-label').textContent = 'RECONNECTING';
+    clearTimeout(wsReconnectTimer);
+    wsReconnectTimer = setTimeout(connectWS, 3000);
+  };
+
+  ws.onmessage = (e) => {
+    try { handleWsMsg(JSON.parse(e.data)); } catch(_) {}
+  };
+
+  // Keepalive ping
+  setInterval(() => {
+    if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({type:'ping'}));
+  }, 25000);
+}
+
+function handleWsMsg(msg) {
+  const type = msg.type;
+
+  if (type === 'portfolio_update') {
+    state.portfolio = msg.portfolio;
+    renderDashboard();
+    return;
+  }
+
+  if (type === 'trade_executed') {
+    pushActivity('TRADE', `${msg.action} ${msg.shares} ${msg.ticker} @ ${fmt(msg.price)} — ${msg.message || ''}`, msg.action === 'BUY' ? 'green' : 'red');
+    refreshTrades();
+    return;
+  }
+
+  if (type === 'pipeline_start') {
+    initAgentProgress(msg.ticker);
+    document.getElementById('agent-progress').style.display = 'block';
+    document.getElementById('verdict-card').style.display = 'none';
+    document.getElementById('analyze-status').textContent = `Analyzing ${msg.ticker}...`;
+    return;
+  }
+
+  if (type === 'pipeline_step') {
+    pushActivity(msg.agent || 'CIO', msg.message || msg.step, 'amber');
+    return;
+  }
+
+  if (type === 'agent_status') {
+    updateAgentStatus(msg.agent, 'working', msg.message || 'Working...');
+    pushActivity(msg.agent, msg.message || 'Working...', 'amber');
+    return;
+  }
+
+  if (type === 'agent_done') {
+    updateAgentStatus(msg.agent, 'done', msg.message || 'Done');
+    const sig = msg.signal || msg.risk_verdict || msg.verdict || msg.severity || '';
+    pushActivity(msg.agent, `Done${sig ? ' — ' + sig : ''}`, 'green');
+    return;
+  }
+
+  if (type === 'pipeline_done') {
+    document.getElementById('analyze-status').textContent = `Done — ${msg.verdict}`;
+    if (msg.result) {
+      state.lastResult = msg.result;
+      renderVerdictCard(msg.result);
+    }
+    document.getElementById('verdict-card').style.display = 'block';
+    refreshTrades();
+    refreshSnapshots();
+    return;
+  }
+
+  if (type === 'pipeline_error') {
+    document.getElementById('analyze-status').textContent = `Error: ${msg.error}`;
+    pushActivity('ERROR', msg.error, 'red');
+    return;
+  }
+
+  if (type === 'auto_trade') {
+    pushActivity('AUTO', `Auto-executed: ${msg.ticker}`, 'green');
+    refreshTrades();
+    return;
+  }
+
+  if (type === 'watchlist_trigger') {
+    pushActivity('SCAN', `${msg.ticker}: ${msg.reason}`, 'amber');
+    return;
+  }
+
+  if (type === 'monthly_report_ready') {
+    pushActivity('REPORT', `Monthly report ready: ${msg.month}`, 'blue');
+    if (document.getElementById('page-reports').classList.contains('active')) loadReports();
+    return;
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// NAVIGATION
+// ═══════════════════════════════════════════════════════════════
+function showPage(name) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('nav button').forEach(b => b.classList.remove('active'));
+  document.getElementById(`page-${name}`).classList.add('active');
+  const idx = ['dashboard','analyze','portfolio','reports','watchlist'].indexOf(name);
+  document.querySelectorAll('nav button')[idx].classList.add('active');
+
+  if (name === 'portfolio') { refreshTrades(); refreshSnapshots(); setTimeout(renderCharts, 100); }
+  if (name === 'reports') loadReports();
+  if (name === 'watchlist') loadWatchlist();
+  if (name === 'dashboard') { refreshTrades(); }
+}
+
+function showTab(name) {
+  document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById(`tab-${name}`).classList.add('active');
+  event.target.classList.add('active');
+}
+
+// ═══════════════════════════════════════════════════════════════
+// DASHBOARD RENDER
+// ═══════════════════════════════════════════════════════════════
+function renderDashboard() {
+  const p = state.portfolio;
+  if (!p) return;
+
+  const pnl = p.total_pnl_eur || 0;
+  const pnlPct = p.total_pnl_pct || 0;
+
+  setText('d-total-value', fmtEur(p.total_value || 10000));
+  setTextCls('d-pnl-eur', fmtEurSign(pnl), pnl >= 0 ? 'green' : 'red');
+  setTextCls('d-pnl-pct', `${pnlPct >= 0 ? '+' : ''}${pnlPct.toFixed(2)}%`, pnl >= 0 ? 'green' : 'red');
+  setText('d-cash', fmtEur(p.cash_eur || 0));
+  const positions = p.positions || {};
+  setText('d-pos-count', `${Object.keys(positions).length} position(s) open`);
+  setTextCls('d-drawdown', `${(p.max_drawdown_pct || 0).toFixed(2)}%`, 'red');
+  setText('d-peak', `Peak: ${fmtEur(p.peak_value || 10000)}`);
+
+  // Top bar ticker
+  const tb = document.getElementById('portfolio-ticker');
+  tb.innerHTML = `
+    <span style="color:var(--dim)">NAV</span>
+    <span style="${pnl >= 0 ? 'color:var(--green)' : 'color:var(--red)'}">${fmtEur(p.total_value || 10000)}</span>
+    <span style="color:var(--dim)">|</span>
+    <span style="${pnl >= 0 ? 'color:var(--green)' : 'color:var(--red)'}">${pnlPct >= 0 ? '+' : ''}${pnlPct.toFixed(2)}%</span>
+  `;
+
+  renderPositionsTable(positions);
+}
+
+function renderPositionsTable(positions) {
+  const tbody = document.getElementById('positions-tbody');
+  if (!positions || Object.keys(positions).length === 0) {
+    tbody.innerHTML = '<tr><td colspan="7" class="dim" style="text-align:center;padding:16px">No open positions</td></tr>';
+    return;
+  }
+  tbody.innerHTML = Object.entries(positions).map(([ticker, pos]) => {
+    const pnl = pos.pnl_eur || 0;
+    const pnlPct = pos.pnl_pct || 0;
+    const entry = pos.entry_price || 0;
+    const curr = pos.current_price || entry;
+    const sl = pos.stop_loss || 0;
+    const tp = pos.take_profit || 0;
+    const range = tp - sl;
+    const progress = range > 0 ? Math.max(0, Math.min(100, (curr - sl) / range * 100)) : 50;
+    const cls = pnl >= 0 ? 'green' : 'red';
+    return `<tr>
+      <td style="font-weight:bold;color:var(--amber)">${ticker}</td>
+      <td>${pos.shares.toFixed(4)}</td>
+      <td>${fmt(entry)}</td>
+      <td style="color:var(--text)">${fmt(curr)}</td>
+      <td class="${cls}">${fmtEurSign(pnl)} (${pnl >= 0 ? '+' : ''}${pnlPct.toFixed(2)}%)</td>
+      <td style="width:80px">
+        <div title="SL: ${fmt(sl)} → TP: ${fmt(tp)}" style="width:80px">
+          <div class="progress-bar"><div class="progress-fill" style="width:${progress}%;background:${progress > 50 ? 'var(--green)' : 'var(--amber)'}"></div></div>
+          <div style="font-size:9px;color:var(--dim);display:flex;justify-content:space-between;margin-top:2px">
+            <span>${fmt(sl)}</span><span>${fmt(tp)}</span>
+          </div>
+        </div>
+      </td>
+      <td><button class="btn red" style="padding:3px 8px;font-size:10px" onclick="sellPosition('${ticker}')">SELL</button></td>
+    </tr>`;
+  }).join('');
+}
+
+function renderTradesRow(t) {
+  const pnl = parseFloat(t.pnl_eur || 0);
+  const action = t.action || '';
+  const cls = action === 'BUY' ? 'tag-buy' : (pnl >= 0 ? 'tag-buy' : 'tag-sell');
+  return `<tr>
+    <td class="dim">${fmtTime(t.timestamp)}</td>
+    <td style="font-weight:bold;color:var(--amber)">${t.ticker}</td>
+    <td><span class="tag ${cls}">${action}</span></td>
+    <td>${parseFloat(t.shares || 0).toFixed(4)}</td>
+    <td>${fmt(t.price_eur)}</td>
+    <td>${fmtEur(t.total_eur)}</td>
+    <td class="${pnl > 0 ? 'green' : pnl < 0 ? 'red' : 'dim'}">${action === 'SELL' ? fmtEurSign(pnl) : '—'}</td>
+    <td><span class="dim">${t.close_reason || '—'}</span></td>
+    <td class="amber">${t.rr_ratio ? t.rr_ratio.toFixed(2) : '—'}</td>
+    <td>${t.conviction ? '★'.repeat(Math.min(t.conviction, 5)) + '☆'.repeat(Math.max(0, 5 - (t.conviction||0))) : '—'}</td>
+  </tr>`;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// ANALYSIS
+// ═══════════════════════════════════════════════════════════════
+function runAnalysis() {
+  const ticker = document.getElementById('ticker-input').value.trim().toUpperCase();
+  if (!ticker) return;
+
+  state.agentStates = {};
+  document.getElementById('analyze-status').textContent = 'Starting...';
+  document.getElementById('verdict-card').style.display = 'none';
+
+  fetch('/api/analyze', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({ticker})
+  });
+}
+
+function initAgentProgress(ticker) {
+  const agentDefs = [
+    {name: 'Elena', role: 'Macro Context'},
+    {name: 'Kai', role: 'Technical'},
+    {name: 'Sophie', role: 'Fundamental'},
+    {name: 'Alex', role: 'Research'},
+    {name: 'Jordan', role: 'Social Sentiment'},
+    {name: 'Viktor', role: 'Risk Manager'},
+    {name: 'Leo', role: 'Bull Case'},
+    {name: 'Nina', role: 'Bear Case'},
+    {name: 'Marcus', role: 'CIO Verdict'},
+    {name: 'Dante', role: "Devil's Advocate"},
+  ];
+
+  const rows = document.getElementById('agent-rows');
+  rows.innerHTML = agentDefs.map(a => `
+    <div class="agent-row" id="arow-${a.name}">
+      <div class="agent-name">${a.name}</div>
+      <div style="color:var(--dim);font-size:10px;min-width:100px">${a.role}</div>
+      <div class="agent-status dim" id="astatus-${a.name}">Waiting...</div>
+      <div id="adot-${a.name}" style="margin-left:auto">
+        <span class="status-dot status-waiting"></span>
+      </div>
+    </div>
+  `).join('');
+}
+
+function updateAgentStatus(agent, status, message) {
+  const statusEl = document.getElementById(`astatus-${agent}`);
+  const dotEl = document.getElementById(`adot-${agent}`);
+  if (!statusEl) return;
+  statusEl.textContent = message || status;
+  const dotClass = {waiting: 'status-waiting', working: 'status-working',
+                    done: 'status-done', error: 'status-error'}[status] || 'status-waiting';
+  if (dotEl) dotEl.innerHTML = `<span class="status-dot ${dotClass}"></span>`;
+
+  if (status === 'working') statusEl.className = 'agent-status amber';
+  else if (status === 'done') statusEl.className = 'agent-status green';
+  else if (status === 'error') statusEl.className = 'agent-status red';
+  else statusEl.className = 'agent-status dim';
+}
+
+function renderVerdictCard(result) {
+  const verdict = result.verdict || 'PASS';
+  const reports = result.reports || {};
+
+  // Verdict box
+  const box = document.getElementById('verdict-box');
+  box.className = `verdict-box ${verdict.toLowerCase()}`;
+  document.getElementById('verdict-tag').textContent = verdict;
+  document.getElementById('verdict-tag').className = `tag tag-${verdict.toLowerCase() === 'invest' ? 'buy' : verdict.toLowerCase() === 'pass' ? 'sell' : 'wait'}`;
+  document.getElementById('verdict-ticker').textContent = result.ticker || '';
+  document.getElementById('verdict-price').textContent = result.current_price ? fmt(result.current_price) + ' EUR' : '';
+  document.getElementById('verdict-principle').textContent = result.investment_principle || '';
+
+  // OVERVIEW
+  setText('ov-size', result.position_size_eur ? fmtEur(result.position_size_eur) : '—');
+  setText('ov-entry', result.entry ? fmt(result.entry) : '—');
+  setText('ov-sl', result.stop_loss ? fmt(result.stop_loss) : '—');
+  setText('ov-tp', result.take_profit ? fmt(result.take_profit) : '—');
+  setText('ov-conv', result.conviction ? `${result.conviction}/10` : '—');
+  setText('ov-unc', result.high_uncertainty ? '⚠ HIGH' : 'Normal');
+  document.getElementById('ov-reasoning').textContent = result.reasoning || '';
+  document.getElementById('ov-signals').innerHTML = [
+    ['Elena (Macro)', reports.macro?.market_regime, 'text'],
+    ['Kai (Tech)', reports.technical?.signal, 'signal'],
+    ['Sophie (Fund)', reports.fundamental?.signal, 'signal'],
+    ['Alex (Research)', reports.research?.signal, 'signal'],
+    ['Jordan (Sentiment)', reports.sentiment?.crowd_sentiment, 'sentiment'],
+    ['Viktor (Risk)', reports.risk?.risk_verdict, 'risk'],
+  ].map(([k, v, t]) => `<div class="kv-row"><span class="kv-key">${k}</span><span class="kv-val ${signalCls(v)}">${v || '—'}</span></div>`).join('');
+
+  // TECHNICAL
+  const tech = reports.technical || {};
+  const ind = tech.indicators || {};
+  setText('tech-signal', tech.signal || '—', signalCls(tech.signal));
+  setText('tech-conv', tech.conviction ? `${tech.conviction}/10` : '—');
+  setText('tech-trend', ind.trend || '—');
+  setText('tech-pattern', tech.pattern || '—');
+  setText('tech-cross', ind.ema_crossover || '—');
+  setText('tech-support', ind.support ? fmt(ind.support) : '—');
+  setText('tech-resistance', ind.resistance ? fmt(ind.resistance) : '—');
+  setText('tech-entry', (tech.key_levels?.entry_zone) ? fmt(tech.key_levels.entry_zone) : '—');
+  setText('tech-stop', (tech.key_levels?.stop_zone) ? fmt(tech.key_levels.stop_zone) : '—');
+  document.getElementById('tech-thesis').textContent = tech.thesis || '';
+  document.getElementById('tech-indicators').innerHTML = [
+    ['RSI(14)', ind.rsi?.toFixed(2)],
+    ['EMA(20)', ind.ema20?.toFixed(4)],
+    ['EMA(50)', ind.ema50?.toFixed(4)],
+    ['MACD', ind.macd?.toFixed(4)],
+    ['ATR(14)', ind.atr?.toFixed(4)],
+    ['BB Upper', ind.bb_upper?.toFixed(4)],
+    ['BB Lower', ind.bb_lower?.toFixed(4)],
+    ['Volume Ratio', ind.volume_ratio?.toFixed(2) + 'x'],
+  ].map(([k,v]) => `<div class="kv-row"><span class="kv-key">${k}</span><span class="kv-val">${v || '—'}</span></div>`).join('');
+
+  // FUNDAMENTAL
+  const fund = reports.fundamental || {};
+  const fin = fund.financials || {};
+  setText('fund-signal', fund.signal || '—', signalCls(fund.signal));
+  setText('fund-fv', fund.fair_value_eur ? fmtEur(fund.fair_value_eur) : '—');
+  const up = fund.upside_pct;
+  setTextCls('fund-upside', up != null ? `${up >= 0 ? '+' : ''}${parseFloat(up).toFixed(1)}%` : '—', up >= 0 ? 'green' : 'red');
+  setText('fund-moat', fund.moat_strength || '—');
+  setText('fund-val', fund.valuation || '—');
+  setText('fund-qual', fund.quality_score ? `${fund.quality_score}/10` : '—');
+  setText('fund-risk', fund.key_risk || '—');
+  document.getElementById('fund-thesis').textContent = fund.thesis || '';
+  document.getElementById('fund-financials').innerHTML = [
+    ['P/E Ratio', fin.pe_ratio?.toFixed(2)],
+    ['P/B Ratio', fin.pb_ratio?.toFixed(2)],
+    ['EPS', fin.eps?.toFixed(4)],
+    ['Rev Growth', fin.revenue_growth ? (fin.revenue_growth * 100).toFixed(1) + '%' : null],
+    ['Debt/Equity', fin.debt_to_equity?.toFixed(2)],
+    ['Profit Margin', fin.profit_margin ? (fin.profit_margin * 100).toFixed(1) + '%' : null],
+    ['Sector', fin.sector],
+    ['Analyst Target', fin.analyst_target ? fmt(fin.analyst_target) : null],
+  ].map(([k,v]) => `<div class="kv-row"><span class="kv-key">${k}</span><span class="kv-val">${v || '—'}</span></div>`).join('');
+
+  // RESEARCH
+  const res = reports.research || {};
+  document.getElementById('res-summary').textContent = res.summary || '';
+  setText('res-score', res.sentiment_score ? `${res.sentiment_score}/10` : '—');
+  setText('res-insider', res.insider_activity || '—');
+  setText('res-short', res.short_interest || '—');
+  document.getElementById('res-catalysts').innerHTML = (res.catalysts || []).map(c => `<li style="color:var(--green)">${c}</li>`).join('');
+  document.getElementById('res-risks').innerHTML = (res.risks || []).map(r => `<li style="color:var(--red)">${r}</li>`).join('');
+  document.getElementById('res-flags').innerHTML = (res.red_flags || []).map(f => `<li style="color:var(--amber)">${f}</li>`).join('');
+
+  // SENTIMENT
+  const sent = reports.sentiment || {};
+  const st = sent.stocktwits_data || {};
+  const rd = sent.reddit_data || {};
+  setText('sent-crowd', sent.crowd_sentiment || '—', sentimentCls(sent.crowd_sentiment));
+  setText('sent-conv', sent.crowd_conviction ? `${sent.crowd_conviction}/10` : '—');
+  document.getElementById('sent-contra').innerHTML = sent.contrarian_flag
+    ? `<span class="tag tag-crit">YES ⚠</span> ${sent.contrarian_note || ''}` : '—';
+  document.getElementById('sent-meme').innerHTML = sent.meme_risk
+    ? `<span class="tag tag-crit">MEME RISK ⚠</span>` : 'No';
+  document.getElementById('sent-narrative').textContent = sent.narrative || '';
+
+  const bull = st.bull_pct || 33.3;
+  const bear = st.bear_pct || 33.3;
+  const neu = st.neutral_pct || 33.4;
+  document.getElementById('gauge-bull').style.width = bull + '%';
+  document.getElementById('gauge-bull').textContent = `BULL ${bull.toFixed(0)}%`;
+  document.getElementById('gauge-neutral').style.width = neu + '%';
+  document.getElementById('gauge-neutral').textContent = `NEU ${neu.toFixed(0)}%`;
+  document.getElementById('gauge-bear').style.width = bear + '%';
+  document.getElementById('gauge-bear').textContent = `BEAR ${bear.toFixed(0)}%`;
+  setText('st-count', st.message_count || 0);
+  const topMsg = st.top_message;
+  document.getElementById('st-top').textContent = topMsg
+    ? `"${topMsg.body}" — ${topMsg.likes} likes [${topMsg.sentiment}]` : 'No messages';
+  setText('reddit-total', rd.total_mentions || 0);
+  document.getElementById('reddit-bull').textContent = rd.bull_count || 0;
+  document.getElementById('reddit-bear').textContent = rd.bear_count || 0;
+
+  // RISK
+  const risk = reports.risk || {};
+  const rv = risk.risk_verdict || '';
+  setText('risk-verdict', rv,
+    rv === 'CRITICAL' ? 'red' : rv === 'ACCEPTABLE' ? 'green' : 'amber');
+  setText('risk-size', risk.position_size_eur ? fmtEur(risk.position_size_eur) : '—');
+  setText('risk-shares', risk.shares?.toFixed(4) || '—');
+  setText('risk-sl', risk.stop_loss ? fmt(risk.stop_loss) : '—');
+  setText('risk-tp', risk.take_profit ? fmt(risk.take_profit) : '—');
+  setText('risk-rr', risk.rr_ratio ? `${risk.rr_ratio.toFixed(2)}:1` : '—');
+  setText('risk-dd', risk.monthly_drawdown ? `${risk.monthly_drawdown.toFixed(2)}%` : '0.00%');
+  setText('risk-mult', risk.size_multiplier ? `×${risk.size_multiplier.toFixed(2)}` : '—');
+  document.getElementById('risk-notes').innerHTML = (risk.risk_notes || [])
+    .map(n => `<li>${n}</li>`).join('');
+  document.getElementById('risk-summary').textContent = risk.risk_summary || '';
+
+  // DEBATE
+  const comm = reports.committee || {};
+  const leo = comm.leo || {};
+  const nina = comm.nina || {};
+  const marcus = comm.marcus || {};
+  document.getElementById('debate-chat').innerHTML = `
+    <div class="chat-msg chat-leo">
+      <div class="chat-speaker green">LEO — Bull Case <span style="color:var(--dim)">(Conviction: ${leo.conviction || '?'}/10)</span></div>
+      ${leo.argument || '—'}
+      ${leo.upside_target ? `<div style="margin-top:6px;color:var(--green);font-size:11px">Upside Target: ${fmt(leo.upside_target)} EUR</div>` : ''}
+    </div>
+    <div class="chat-msg chat-nina">
+      <div class="chat-speaker red">NINA — Bear Case <span style="color:var(--dim)">(Conviction: ${nina.conviction || '?'}/10)</span></div>
+      ${nina.argument || '—'}
+      ${nina.downside_target ? `<div style="margin-top:6px;color:var(--red);font-size:11px">Downside Target: ${fmt(nina.downside_target)} EUR</div>` : ''}
+    </div>
+    <div class="chat-msg chat-marcus">
+      <div class="chat-speaker amber">MARCUS — CIO Verdict <span style="color:var(--dim)">(Conviction: ${comm.conviction || '?'}/10)</span></div>
+      ${comm.reasoning || '—'}
+      <div style="margin-top:8px;color:var(--amber);font-style:italic;font-size:11px">"${comm.investment_principle || ''}"</div>
+      ${comm.override_reason ? `<div style="margin-top:6px;color:var(--red);font-size:11px">⚠ OVERRIDE: ${comm.override_reason}</div>` : ''}
+    </div>
+  `;
+
+  // DANTE
+  const dante = reports.dante;
+  if (dante) {
+    const sevCls = dante.severity === 'HIGH' ? 'red' : dante.severity === 'LOW' ? 'green' : 'amber';
+    document.getElementById('dante-content').innerHTML = `
+      <div class="dante-card">
+        <div class="dante-header">⚠ DEVIL'S ADVOCATE — DANTE
+          <span class="tag ${dante.severity === 'HIGH' ? 'tag-crit' : 'tag-wait'}" style="margin-left:8px">${dante.severity}</span>
+        </div>
+        <div style="line-height:1.7;margin-bottom:12px">${dante.fatal_flaw || ''}</div>
+        <div class="kv-row"><span class="kv-key">Invalidating Scenario</span><span class="kv-val red">${dante.invalidating_scenario || ''}</span></div>
+        <div class="kv-row"><span class="kv-key">Probability</span><span class="kv-val amber">${dante.probability_estimate || '?'}</span></div>
+        <div class="kv-row"><span class="kv-key">Mitigation</span><span class="kv-val green">${dante.mitigation || '—'}</span></div>
+        <div style="margin-top:8px;color:var(--dim);font-size:10px;letter-spacing:1px">ADVISORY ONLY — DOES NOT BLOCK TRADE</div>
+      </div>
+    `;
+  } else {
+    document.getElementById('dante-content').innerHTML =
+      '<div class="dim" style="text-align:center;padding:20px">Dante was not summoned (verdict is not INVEST).</div>';
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// ACTIVITY FEED
+// ═══════════════════════════════════════════════════════════════
+const MAX_FEED = 80;
+function pushActivity(agent, message, color = 'text') {
+  const feed = document.getElementById('activity-feed');
+  const emptyMsg = feed.querySelector('.dim');
+  if (emptyMsg) emptyMsg.remove();
+
+  const clr = {green:'var(--green)', red:'var(--red)', amber:'var(--amber)',
+               blue:'var(--blue)', text:'var(--text)'}[color] || 'var(--text)';
+  const item = document.createElement('div');
+  item.className = 'feed-item';
+  item.innerHTML = `
+    <span class="feed-agent" style="color:var(--amber)">${agent}</span>
+    <span class="feed-msg" style="color:${clr}">${message}</span>
+    <span class="feed-ts">${nowTime()}</span>
+  `;
+  feed.insertBefore(item, feed.firstChild);
+
+  // Prune
+  const items = feed.querySelectorAll('.feed-item');
+  if (items.length > MAX_FEED) items[items.length - 1].remove();
+}
+
+// ═══════════════════════════════════════════════════════════════
+// DATA LOADERS
+// ═══════════════════════════════════════════════════════════════
+async function refreshTrades() {
+  const r = await fetch('/api/trades?limit=200');
+  const data = await r.json();
+  state.trades = data.trades || [];
+  renderTradesTable();
+  renderRecentTrades();
+}
+
+function renderTradesTable() {
+  const filter = document.getElementById('filter-action')?.value || '';
+  const trades = filter ? state.trades.filter(t => t.action === filter) : state.trades;
+  const tbody = document.getElementById('full-trades-tbody');
+  if (tbody) {
+    tbody.innerHTML = trades.length
+      ? trades.map(renderTradesRow).join('')
+      : '<tr><td colspan="10" class="dim" style="text-align:center;padding:16px">No trades</td></tr>';
+  }
+}
+
+function renderRecentTrades() {
+  const tbody = document.getElementById('trades-tbody');
+  if (!tbody) return;
+  const recent = state.trades.slice(0, 15);
+  tbody.innerHTML = recent.length
+    ? recent.map(t => {
+        const pnl = parseFloat(t.pnl_eur || 0);
+        return `<tr>
+          <td class="dim">${fmtTime(t.timestamp)}</td>
+          <td style="font-weight:bold;color:var(--amber)">${t.ticker}</td>
+          <td><span class="tag ${t.action === 'BUY' ? 'tag-buy' : 'tag-sell'}">${t.action}</span></td>
+          <td>${parseFloat(t.shares||0).toFixed(4)}</td>
+          <td>${fmt(t.price_eur)}</td>
+          <td>${fmtEur(t.total_eur)}</td>
+          <td class="${pnl > 0 ? 'green' : pnl < 0 ? 'red' : 'dim'}">${t.action === 'SELL' ? fmtEurSign(pnl) : '—'}</td>
+          <td class="dim">${t.close_reason || '—'}</td>
+          <td>${t.conviction ? '★'.repeat(Math.min(t.conviction,5)) : '—'}</td>
+        </tr>`;
+      }).join('')
+    : '<tr><td colspan="9" class="dim" style="text-align:center;padding:16px">No trades yet</td></tr>';
+}
+
+async function refreshSnapshots() {
+  const r = await fetch('/api/portfolio/snapshots');
+  const data = await r.json();
+  state.snapshots = data.snapshots || [];
+  if (state.equityChart) renderCharts();
+}
+
+async function loadReports() {
+  const r = await fetch('/api/reports');
+  const data = await r.json();
+  const container = document.getElementById('reports-list');
+  const reports = data.reports || [];
+  if (!reports.length) {
+    container.innerHTML = '<div class="dim" style="text-align:center;padding:40px">No reports generated yet.</div>';
+    return;
+  }
+  container.innerHTML = reports.map(rep => {
+    let rj = {};
+    try { rj = JSON.parse(rep.report_json || '{}'); } catch(_){}
+    return `
+      <div class="card" style="margin-bottom:12px">
+        <div style="display:flex;justify-content:space-between;cursor:pointer"
+             onclick="toggleReport('rep-${rep.id}')">
+          <div style="font-size:14px;font-weight:bold;color:var(--amber)">${rep.month}</div>
+          <div style="display:flex;gap:20px;font-size:12px">
+            <span class="${(rj.monthly_pnl_eur||0) >= 0 ? 'green' : 'red'}">
+              ${fmtEurSign(rj.monthly_pnl_eur||0)} (${(rj.monthly_pnl_pct||0).toFixed(2)}%)
+            </span>
+            <span class="dim">Win: ${rj.win_rate_pct||0}%</span>
+            <span class="dim">Trades: ${rj.total_trades||0}</span>
+            <span style="color:var(--dim)">▼</span>
+          </div>
+        </div>
+        <div id="rep-${rep.id}" style="display:none;margin-top:16px">
+          <div class="grid-3">
+            <div>
+              <div class="kv-row"><span class="kv-key">Start</span><span class="kv-val">${fmtEur(rj.portfolio_start_eur||0)}</span></div>
+              <div class="kv-row"><span class="kv-key">End</span><span class="kv-val">${fmtEur(rj.portfolio_end_eur||0)}</span></div>
+              <div class="kv-row"><span class="kv-key">Monthly P&L</span>
+                <span class="kv-val ${(rj.monthly_pnl_eur||0)>=0?'green':'red'}">${fmtEurSign(rj.monthly_pnl_eur||0)}</span></div>
+              <div class="kv-row"><span class="kv-key">Max Drawdown</span><span class="kv-val red">${(rj.max_drawdown_pct||0).toFixed(2)}%</span></div>
+            </div>
+            <div>
+              <div class="kv-row"><span class="kv-key">Total Trades</span><span class="kv-val">${rj.total_trades||0}</span></div>
+              <div class="kv-row"><span class="kv-key">Win Rate</span><span class="kv-val green">${rj.win_rate_pct||0}%</span></div>
+              <div class="kv-row"><span class="kv-key">Best Trade</span>
+                <span class="kv-val green">${rj.best_trade ? rj.best_trade.ticker + ' ' + fmtEurSign(rj.best_trade.pnl_eur) : '—'}</span></div>
+              <div class="kv-row"><span class="kv-key">Worst Trade</span>
+                <span class="kv-val red">${rj.worst_trade ? rj.worst_trade.ticker + ' ' + fmtEurSign(rj.worst_trade.pnl_eur) : '—'}</span></div>
+            </div>
+            <div>
+              <div class="section-title">Dante Scorecard</div>
+              ${rj.dante_scorecard ? `
+                <div class="kv-row"><span class="kv-key">Warnings</span><span class="kv-val">${rj.dante_scorecard.warnings_issued}</span></div>
+                <div class="kv-row"><span class="kv-key">Correct</span><span class="kv-val green">${rj.dante_scorecard.warnings_correct}</span></div>
+                <div class="kv-row"><span class="kv-key">Accuracy</span><span class="kv-val amber">${rj.dante_scorecard.accuracy_pct}%</span></div>
+              ` : '—'}
+            </div>
+          </div>
+          <div class="section-title mt16">Marcus' Narrative</div>
+          <div style="line-height:1.8;color:var(--text);white-space:pre-wrap;background:var(--bg3);padding:16px;border-radius:4px;font-size:12px">${rep.narrative || ''}</div>
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+function toggleReport(id) {
+  const el = document.getElementById(id);
+  if (el) el.style.display = el.style.display === 'none' ? 'block' : 'none';
+}
+
+async function generateReport() {
+  await fetch('/api/reports/generate', {method: 'POST'});
+  pushActivity('REPORT', 'Generating monthly report...', 'amber');
+  setTimeout(loadReports, 5000);
+}
+
+async function loadWatchlist() {
+  const r = await fetch('/api/watchlist');
+  const data = await r.json();
+  state.watchlist = data.watchlist || [];
+  renderWatchlist();
+}
+
+function renderWatchlist() {
+  const tbody = document.getElementById('watchlist-tbody');
+  if (!tbody) return;
+  if (!state.watchlist.length) {
+    tbody.innerHTML = '<tr><td colspan="5" class="dim" style="text-align:center;padding:16px">Watchlist is empty</td></tr>';
+    return;
+  }
+  tbody.innerHTML = state.watchlist.map(item => {
+    const sig = item.last_signal || '';
+    const sigCls = sig.includes('INVEST') ? 'green' : sig.includes('PASS') ? 'red' : 'dim';
+    return `<tr>
+      <td style="font-weight:bold;color:var(--amber)">${item.ticker}</td>
+      <td class="${sigCls}">${sig || '—'}</td>
+      <td class="dim">${item.last_scan ? fmtTime(item.last_scan) : '—'}</td>
+      <td class="dim">${item.added_at ? fmtTime(item.added_at) : '—'}</td>
+      <td>
+        <button class="btn ghost" style="padding:3px 10px;font-size:10px"
+          onclick="analyzeFromWatchlist('${item.ticker}')">Analyze</button>
+        <button class="btn red" style="padding:3px 8px;font-size:10px;margin-left:4px"
+          onclick="removeFromWatchlist('${item.ticker}')">✕</button>
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+function analyzeFromWatchlist(ticker) {
+  showPage('analyze');
+  document.getElementById('ticker-input').value = ticker;
+  runAnalysis();
+}
+
+async function addToWatchlist() {
+  const ticker = document.getElementById('wl-input').value.trim().toUpperCase();
+  if (!ticker) return;
+  await fetch('/api/watchlist', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({ticker})
+  });
+  document.getElementById('wl-input').value = '';
+  loadWatchlist();
+}
+
+async function removeFromWatchlist(ticker) {
+  await fetch(`/api/watchlist/${ticker}`, {method: 'DELETE'});
+  loadWatchlist();
+}
+
+async function sellPosition(ticker) {
+  if (!confirm(`Sell ${ticker}?`)) return;
+  const r = await fetch(`/api/sell/${ticker}`, {method: 'POST'});
+  const data = await r.json();
+  if (data.success) {
+    pushActivity('TRADE', `Sold ${ticker} — PnL: ${fmtEurSign(data.pnl_eur)}`, data.pnl_eur >= 0 ? 'green' : 'red');
+    setTimeout(() => {
+      fetch('/api/portfolio').then(r=>r.json()).then(p => { state.portfolio = p; renderDashboard(); });
+    }, 500);
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// CHARTS
+// ═══════════════════════════════════════════════════════════════
+function renderCharts() {
+  // Equity curve
+  const ctx1 = document.getElementById('equity-chart')?.getContext('2d');
+  if (ctx1) {
+    if (state.equityChart) state.equityChart.destroy();
+    const snapshots = state.snapshots;
+    const labels = snapshots.map(s => fmtTimeShort(s.timestamp));
+    const values = snapshots.map(s => parseFloat(s.total_value || 10000));
+    if (!values.length) { labels.push('Start'); values.push(10000); }
+
+    state.equityChart = new Chart(ctx1, {
+      type: 'line',
+      data: {
+        labels,
+        datasets: [{
+          data: values,
+          borderColor: '#00d084',
+          backgroundColor: 'rgba(0,208,132,0.06)',
+          borderWidth: 1.5,
+          pointRadius: 0,
+          fill: true,
+          tension: 0.3,
+        }]
+      },
+      options: {
+        animation: false,
+        plugins: { legend: {display: false} },
+        scales: {
+          x: { ticks: {color:'#555', maxTicksLimit:8, font:{size:10}}, grid:{color:'#111'} },
+          y: {
+            ticks: {color:'#555', font:{size:10}, callback: v => '€' + v.toFixed(0)},
+            grid: {color:'#111'}
+          }
+        }
+      }
+    });
+  }
+
+  // Win/Loss donut
+  const ctx2 = document.getElementById('winloss-chart')?.getContext('2d');
+  if (ctx2) {
+    if (state.winlossChart) state.winlossChart.destroy();
+    const sells = state.trades.filter(t => t.action === 'SELL');
+    const wins = sells.filter(t => parseFloat(t.pnl_eur||0) > 0).length;
+    const losses = sells.filter(t => parseFloat(t.pnl_eur||0) <= 0).length;
+
+    state.winlossChart = new Chart(ctx2, {
+      type: 'doughnut',
+      data: {
+        labels: ['Wins', 'Losses'],
+        datasets: [{
+          data: [wins || 1, losses || 0],
+          backgroundColor: ['rgba(0,208,132,0.7)', 'rgba(255,68,102,0.7)'],
+          borderColor: ['#00d084', '#ff4466'],
+          borderWidth: 1,
+        }]
+      },
+      options: {
+        animation: false,
+        cutout: '70%',
+        plugins: {
+          legend: {
+            position: 'bottom',
+            labels: { color: '#888', font: {size: 11}, padding: 16 }
+          }
+        }
+      }
+    });
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// HELPERS
+// ═══════════════════════════════════════════════════════════════
+function fmt(v) {
+  if (v == null || v === '') return '—';
+  return parseFloat(v).toFixed(2);
+}
+function fmtEur(v) { return '€' + parseFloat(v || 0).toLocaleString('en', {minimumFractionDigits:2, maximumFractionDigits:2}); }
+function fmtEurSign(v) { const n = parseFloat(v||0); return (n >= 0 ? '+€' : '-€') + Math.abs(n).toFixed(2); }
+function fmtTime(ts) {
+  if (!ts) return '—';
+  try { return new Date(ts).toLocaleString('en-GB', {month:'short',day:'2-digit',hour:'2-digit',minute:'2-digit'}); }
+  catch(_) { return ts.slice(0,16); }
+}
+function fmtTimeShort(ts) {
+  if (!ts) return '';
+  try { return new Date(ts).toLocaleDateString('en-GB', {month:'short',day:'2-digit'}); }
+  catch(_) { return ts.slice(5,10); }
+}
+function nowTime() { return new Date().toLocaleTimeString('en-GB', {hour:'2-digit',minute:'2-digit',second:'2-digit'}); }
+
+function setText(id, text, cls) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.textContent = text ?? '—';
+  if (cls) { el.className = cls; }
+}
+function setTextCls(id, text, cls) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.textContent = text ?? '—';
+  if (cls) el.className = cls;
+}
+
+function signalCls(sig) {
+  if (!sig) return 'dim';
+  if (['STRONG_BUY','BUY'].includes(sig)) return 'green';
+  if (['STRONG_SELL','SELL'].includes(sig)) return 'red';
+  return 'amber';
+}
+function sentimentCls(s) {
+  if (!s) return 'dim';
+  if (['VERY_BULLISH','BULLISH'].includes(s)) return 'green';
+  if (['VERY_BEARISH','BEARISH'].includes(s)) return 'red';
+  return 'amber';
+}
+
+// Clock
+function updateClock() {
+  document.getElementById('clock').textContent =
+    new Date().toLocaleString('en-GB', {
+      weekday:'short', year:'numeric', month:'short',
+      day:'2-digit', hour:'2-digit', minute:'2-digit', second:'2-digit',
+    }) + ' UTC';
+}
+
+// ═══════════════════════════════════════════════════════════════
+// INIT
+// ═══════════════════════════════════════════════════════════════
+(async function init() {
+  setInterval(updateClock, 1000);
+  updateClock();
+
+  connectWS();
+
+  // Load portfolio
+  const pr = await fetch('/api/portfolio');
+  state.portfolio = await pr.json();
+  renderDashboard();
+
+  // Load trades
+  await refreshTrades();
+  await refreshSnapshots();
+
+  // Load watchlist
+  await loadWatchlist();
+
+  // Enter key for analyze
+  document.getElementById('ticker-input').addEventListener('keydown', e => {
+    if (e.key === 'Enter') runAnalysis();
+  });
+  document.getElementById('wl-input').addEventListener('keydown', e => {
+    if (e.key === 'Enter') addToWatchlist();
+  });
+})();
+</script>
+</body>
+</html>
