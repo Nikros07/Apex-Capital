@@ -29,14 +29,14 @@ async def lifespan(app: FastAPI):
         if t:
             add_to_watchlist(t)
 
-    try:
-        from utils.key_manager import KeyManager
-        KeyManager.get_instance()
-    except ValueError as e:
-        print(f"[WARNING] {e}")
+    from utils.key_manager import KeyManager
+    KeyManager.get_instance()  # pre-warm singleton (never raises now)
 
-    from core.scheduler import setup_scheduler
-    setup_scheduler(get_pm(), get_cio(), broadcast)
+    try:
+        from core.scheduler import setup_scheduler
+        setup_scheduler(get_pm(), get_cio(), broadcast)
+    except Exception as e:
+        print(f"[WARNING] Scheduler/agent setup failed: {e}")
 
     print("=" * 50)
     print("  APEX CAPITAL MANAGEMENT — ONLINE")

@@ -29,7 +29,7 @@ def _fetch_price_sync(ticker: str) -> float:
 
 
 async def fetch_ohlcv(ticker: str, period: str = "6mo") -> Optional[pd.DataFrame]:
-    loop = asyncio.get_event_loop()
+    loop = asyncio.get_running_loop()
     try:
         return await loop.run_in_executor(None, partial(_fetch_ohlcv_sync, ticker, period))
     except Exception:
@@ -37,7 +37,7 @@ async def fetch_ohlcv(ticker: str, period: str = "6mo") -> Optional[pd.DataFrame
 
 
 async def fetch_info(ticker: str) -> dict:
-    loop = asyncio.get_event_loop()
+    loop = asyncio.get_running_loop()
     try:
         return await loop.run_in_executor(None, partial(_fetch_info_sync, ticker))
     except Exception:
@@ -45,7 +45,7 @@ async def fetch_info(ticker: str) -> dict:
 
 
 async def fetch_current_price(ticker: str) -> float:
-    loop = asyncio.get_event_loop()
+    loop = asyncio.get_running_loop()
     try:
         return await loop.run_in_executor(None, partial(_fetch_price_sync, ticker))
     except Exception:

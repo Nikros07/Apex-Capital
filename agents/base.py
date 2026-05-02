@@ -39,6 +39,8 @@ class BaseAgent:
 
         for attempt in range(max_retries):
             key = self.km.get_key(self.name)
+            if key == "__no_key__":
+                return json.dumps({"error": "No OpenRouter API key configured. Add OPENROUTER_KEY_1 in Railway Variables."})
             try:
                 async with httpx.AsyncClient(timeout=90.0) as client:
                     resp = await client.post(

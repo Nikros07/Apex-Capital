@@ -16,9 +16,12 @@ class KeyManager:
             if fallback:
                 self._keys.append(fallback)
         if not self._keys:
-            raise ValueError(
-                "No OpenRouter API keys found. Set OPENROUTER_KEY_1 through OPENROUTER_KEY_5 in .env"
+            # Don't crash startup — app still serves dashboard, LLM calls return fallback responses
+            print(
+                "[KeyManager] WARNING: No OpenRouter API keys found. "
+                "Set OPENROUTER_KEY_1..5 in Railway Variables. LLM agents will use fallback responses."
             )
+            self._keys = ["__no_key__"]
         self._agent_assignments: dict[str, str] = {}
         self._round_robin_idx: int = 0
 
