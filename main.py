@@ -24,26 +24,33 @@ async def lifespan(app: FastAPI):
     # ── Startup ──────────────────────────────────────────────────────────────
     init_db()
 
-    # Default watchlist — 58 diversified tickers across sectors
-    _DEFAULT_WATCHLIST = (
+    # ── Seed default watchlist — always added on every startup (INSERT OR IGNORE) ──
+    # These are seeded regardless of the WATCHLIST env var so they survive
+    # Railway redeploys even when WATCHLIST is set to a smaller custom list.
+    _DEFAULT_TICKERS = [
         # Tech mega-cap
-        "AAPL,MSFT,NVDA,GOOGL,META,AMZN,TSLA,AMD,AVGO,QCOM,ORCL,CRM,ADBE,NFLX,INTC,"
+        "AAPL", "MSFT", "NVDA", "GOOGL", "META", "AMZN", "TSLA", "AMD", "AVGO", "QCOM",
+        "ORCL", "CRM", "ADBE", "NFLX", "INTC",
         # Finance
-        "JPM,BAC,V,MA,GS,MS,BRK-B,AXP,"
+        "JPM", "BAC", "V", "MA", "GS", "MS", "BRK-B", "AXP",
         # Healthcare
-        "UNH,LLY,JNJ,ABBV,MRK,PFE,"
+        "UNH", "LLY", "JNJ", "ABBV", "MRK", "PFE",
         # Energy
-        "XOM,CVX,COP,SLB,"
+        "XOM", "CVX", "COP", "SLB",
         # Consumer & Retail
-        "WMT,COST,HD,MCD,PG,"
+        "WMT", "COST", "HD", "MCD", "PG",
         # ETFs
-        "SPY,QQQ,IWM,XLK,XLF,GLD,"
+        "SPY", "QQQ", "IWM", "XLK", "XLF", "GLD",
         # High-growth / momentum
-        "PLTR,COIN,UBER,SNOW,CRWD,DDOG,RBLX,ZS,"
+        "PLTR", "COIN", "UBER", "SNOW", "CRWD", "DDOG", "RBLX", "ZS",
         # Semis & Global
-        "TSM,ASML,MU,NVO,SHOP,SPOT"
-    )
-    for ticker in os.getenv("WATCHLIST", _DEFAULT_WATCHLIST).split(","):
+        "TSM", "ASML", "MU", "NVO", "SHOP", "SPOT",
+    ]
+    for t in _DEFAULT_TICKERS:
+        add_to_watchlist(t)
+
+    # Also add any extra tickers from WATCHLIST env var (additive, not override)
+    for ticker in os.getenv("WATCHLIST", "").split(","):
         t = ticker.strip().upper()
         if t:
             add_to_watchlist(t)
