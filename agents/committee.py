@@ -84,8 +84,8 @@ class InvestmentCommittee:
             "key_points": ["Macro headwinds", "Valuation stretched", "Execution risk"],
         })
 
-        leo_conv = int(leo.get("conviction", 5))
-        nina_conv = int(nina.get("conviction", 5))
+        leo_conv = int(float(leo.get("conviction") or 5))
+        nina_conv = int(float(nina.get("conviction") or 5))
         high_uncertainty = abs(leo_conv - nina_conv) > 2
 
         risk = all_reports.get("risk", {})

@@ -41,7 +41,7 @@ class PortfolioManager:
         stop_loss = float(committee.get("stop_loss") or risk.get("stop_loss") or 0)
         take_profit = float(committee.get("take_profit") or risk.get("take_profit") or 0)
         rr_ratio = float(risk.get("rr_ratio") or 0)
-        conviction = int(committee.get("conviction") or 5)
+        conviction = int(float(committee.get("conviction") or 5))
 
         if current_price <= 0 or position_size_eur <= 0:
             return {"success": False, "reason": "Invalid price or position size"}

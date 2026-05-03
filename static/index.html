@@ -585,7 +585,7 @@ const AGENTS = ['Elena','Kai','Sophie','Alex','Jordan','Viktor','Leo','Nina','Ma
 // ═══════════════════════════════════════════════════════════════
 // WEBSOCKET
 // ═══════════════════════════════════════════════════════════════
-let ws, wsReconnectTimer;
+let ws, wsReconnectTimer, wsPingInterval;
 
 function connectWS() {
   const proto = location.protocol === 'https:' ? 'wss' : 'ws';
@@ -594,11 +594,17 @@ function connectWS() {
   ws.onopen = () => {
     document.getElementById('ws-status').style.background = 'var(--green)';
     document.getElementById('ws-label').textContent = 'LIVE';
+    // Clear any existing ping interval before creating a new one (reconnect safety)
+    clearInterval(wsPingInterval);
+    wsPingInterval = setInterval(() => {
+      if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({type:'ping'}));
+    }, 25000);
   };
 
   ws.onclose = () => {
     document.getElementById('ws-status').style.background = 'var(--red)';
     document.getElementById('ws-label').textContent = 'RECONNECTING';
+    clearInterval(wsPingInterval);
     clearTimeout(wsReconnectTimer);
     wsReconnectTimer = setTimeout(connectWS, 3000);
   };
@@ -606,11 +612,6 @@ function connectWS() {
   ws.onmessage = (e) => {
     try { handleWsMsg(JSON.parse(e.data)); } catch(_) {}
   };
-
-  // Keepalive ping
-  setInterval(() => {
-    if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({type:'ping'}));
-  }, 25000);
 }
 
 function handleWsMsg(msg) {
@@ -766,7 +767,7 @@ function renderPositionsTable(positions) {
     const cls = pnl >= 0 ? 'green' : 'red';
     return `<tr>
       <td style="font-weight:bold;color:var(--amber)">${ticker}</td>
-      <td>${pos.shares.toFixed(4)}</td>
+      <td>${(pos.shares || 0).toFixed(4)}</td>
       <td>${fmt(entry)}</td>
       <td style="color:var(--text)">${fmt(curr)}</td>
       <td class="${cls}">${fmtEurSign(pnl)} (${pnl >= 0 ? '+' : ''}${pnlPct.toFixed(2)}%)</td>
@@ -952,9 +953,9 @@ function renderVerdictCard(result) {
   setText('res-score', res.sentiment_score ? `${res.sentiment_score}/10` : '—');
   setText('res-insider', res.insider_activity || '—');
   setText('res-short', res.short_interest || '—');
-  document.getElementById('res-catalysts').innerHTML = (res.catalysts || []).map(c => `<li style="color:var(--green)">${c}</li>`).join('');
-  document.getElementById('res-risks').innerHTML = (res.risks || []).map(r => `<li style="color:var(--red)">${r}</li>`).join('');
-  document.getElementById('res-flags').innerHTML = (res.red_flags || []).map(f => `<li style="color:var(--amber)">${f}</li>`).join('');
+  document.getElementById('res-catalysts').innerHTML = (res.catalysts || []).map(c => `<li style="color:var(--green)">${esc(c)}</li>`).join('');
+  document.getElementById('res-risks').innerHTML = (res.risks || []).map(r => `<li style="color:var(--red)">${esc(r)}</li>`).join('');
+  document.getElementById('res-flags').innerHTML = (res.red_flags || []).map(f => `<li style="color:var(--amber)">${esc(f)}</li>`).join('');
 
   // SENTIMENT
   const sent = reports.sentiment || {};
@@ -963,7 +964,7 @@ function renderVerdictCard(result) {
   setText('sent-crowd', sent.crowd_sentiment || '—', sentimentCls(sent.crowd_sentiment));
   setText('sent-conv', sent.crowd_conviction ? `${sent.crowd_conviction}/10` : '—');
   document.getElementById('sent-contra').innerHTML = sent.contrarian_flag
-    ? `<span class="tag tag-crit">YES ⚠</span> ${sent.contrarian_note || ''}` : '—';
+    ? `<span class="tag tag-crit">YES ⚠</span> ${esc(sent.contrarian_note || '')}` : '—';
   document.getElementById('sent-meme').innerHTML = sent.meme_risk
     ? `<span class="tag tag-crit">MEME RISK ⚠</span>` : 'No';
   document.getElementById('sent-narrative').textContent = sent.narrative || '';
@@ -998,7 +999,7 @@ function renderVerdictCard(result) {
   setText('risk-dd', risk.monthly_drawdown ? `${risk.monthly_drawdown.toFixed(2)}%` : '0.00%');
   setText('risk-mult', risk.size_multiplier ? `×${risk.size_multiplier.toFixed(2)}` : '—');
   document.getElementById('risk-notes').innerHTML = (risk.risk_notes || [])
-    .map(n => `<li>${n}</li>`).join('');
+    .map(n => `<li>${esc(n)}</li>`).join('');
   document.getElementById('risk-summary').textContent = risk.risk_summary || '';
 
   // DEBATE
@@ -1034,10 +1035,10 @@ function renderVerdictCard(result) {
         <div class="dante-header">⚠ DEVIL'S ADVOCATE — DANTE
           <span class="tag ${dante.severity === 'HIGH' ? 'tag-crit' : 'tag-wait'}" style="margin-left:8px">${dante.severity}</span>
         </div>
-        <div style="line-height:1.7;margin-bottom:12px">${dante.fatal_flaw || ''}</div>
-        <div class="kv-row"><span class="kv-key">Invalidating Scenario</span><span class="kv-val red">${dante.invalidating_scenario || ''}</span></div>
-        <div class="kv-row"><span class="kv-key">Probability</span><span class="kv-val amber">${dante.probability_estimate || '?'}</span></div>
-        <div class="kv-row"><span class="kv-key">Mitigation</span><span class="kv-val green">${dante.mitigation || '—'}</span></div>
+        <div style="line-height:1.7;margin-bottom:12px">${esc(dante.fatal_flaw || '')}</div>
+        <div class="kv-row"><span class="kv-key">Invalidating Scenario</span><span class="kv-val red">${esc(dante.invalidating_scenario || '')}</span></div>
+        <div class="kv-row"><span class="kv-key">Probability</span><span class="kv-val amber">${esc(dante.probability_estimate || '?')}</span></div>
+        <div class="kv-row"><span class="kv-key">Mitigation</span><span class="kv-val green">${esc(dante.mitigation || '—')}</span></div>
         <div style="margin-top:8px;color:var(--dim);font-size:10px;letter-spacing:1px">ADVISORY ONLY — DOES NOT BLOCK TRADE</div>
       </div>
     `;
@@ -1061,8 +1062,8 @@ function pushActivity(agent, message, color = 'text') {
   const item = document.createElement('div');
   item.className = 'feed-item';
   item.innerHTML = `
-    <span class="feed-agent" style="color:var(--amber)">${agent}</span>
-    <span class="feed-msg" style="color:${clr}">${message}</span>
+    <span class="feed-agent" style="color:var(--amber)">${esc(String(agent))}</span>
+    <span class="feed-msg" style="color:${clr}">${esc(String(message))}</span>
     <span class="feed-ts">${nowTime()}</span>
   `;
   feed.insertBefore(item, feed.firstChild);
@@ -1110,7 +1111,7 @@ function renderRecentTrades() {
           <td>${fmtEur(t.total_eur)}</td>
           <td class="${pnl > 0 ? 'green' : pnl < 0 ? 'red' : 'dim'}">${t.action === 'SELL' ? fmtEurSign(pnl) : '—'}</td>
           <td class="dim">${t.close_reason || '—'}</td>
-          <td>${t.conviction ? '★'.repeat(Math.min(t.conviction,5)) : '—'}</td>
+          <td>${t.conviction ? '★'.repeat(Math.min(Math.round(t.conviction||0),5)) : '—'}</td>
         </tr>`;
       }).join('')
     : '<tr><td colspan="9" class="dim" style="text-align:center;padding:16px">No trades yet</td></tr>';
@@ -1310,7 +1311,7 @@ function renderCharts() {
   // Win/Loss donut
   const ctx2 = document.getElementById('winloss-chart')?.getContext('2d');
   if (ctx2) {
-    if (state.winlossChart) state.winlossChart.destroy();
+    if (state.winlossChart) { state.winlossChart.destroy(); state.winlossChart = null; }
     const sells = state.trades.filter(t => t.action === 'SELL');
     const wins = sells.filter(t => parseFloat(t.pnl_eur||0) > 0).length;
     const losses = sells.filter(t => parseFloat(t.pnl_eur||0) <= 0).length;
@@ -1348,7 +1349,7 @@ function fmt(v) {
   const n = parseFloat(v);
   return isNaN(n) ? '—' : n.toFixed(2);
 }
-function fmtEur(v) { return '€' + parseFloat(v || 0).toLocaleString('en', {minimumFractionDigits:2, maximumFractionDigits:2}); }
+function fmtEur(v) { const n = parseFloat(v || 0); return '€' + (isNaN(n) ? '0.00' : n.toLocaleString('en', {minimumFractionDigits:2, maximumFractionDigits:2})); }
 function fmtEurSign(v) { const n = parseFloat(v||0); return (n >= 0 ? '+€' : '-€') + Math.abs(n).toFixed(2); }
 function fmtTime(ts) {
   if (!ts) return '—';

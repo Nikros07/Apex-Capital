@@ -9,11 +9,12 @@ class KeyManager:
         self._keys: list[str] = []
         for i in range(1, 6):
             key = os.getenv(f"OPENROUTER_KEY_{i}", "").strip()
-            if key:
+            # Skip empty values and placeholder values from .env.example
+            if key and not key.endswith("...") and len(key) > 20:
                 self._keys.append(key)
         if not self._keys:
             fallback = os.getenv("OPENROUTER_API_KEY", "").strip()
-            if fallback:
+            if fallback and not fallback.endswith("...") and len(fallback) > 20:
                 self._keys.append(fallback)
         if not self._keys:
             # Don't crash startup — app still serves dashboard, LLM calls return fallback responses
