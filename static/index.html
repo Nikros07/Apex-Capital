@@ -549,9 +549,13 @@
 <!-- ═══════════════════════════════════════════════════════════════ -->
 <div id="page-watchlist" class="page">
   <div class="card" style="margin-bottom:16px">
-    <div style="display:flex;gap:10px;align-items:center">
+    <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
       <input type="text" id="wl-input" placeholder="Add ticker..." maxlength="10">
       <button class="btn" onclick="addToWatchlist()">+ Add</button>
+      <button class="btn ghost" onclick="triggerScan()" id="scan-btn" style="margin-left:auto">⚡ Scan All Now</button>
+    </div>
+    <div style="margin-top:8px;font-size:10px;color:var(--dim)">
+      Auto-scans: 08:30 · 11:00 · 15:30 · 20:00 CET (Mon–Fri) — triggers analysis on RSI&lt;35/&gt;65, Vol&gt;1.5×, EMA cross, MACD signal
     </div>
   </div>
   <div class="card">
@@ -1248,6 +1252,21 @@ async function addToWatchlist() {
   } catch(err) {
     pushActivity('ERROR', `Could not add ${ticker}: ${err.message}`, 'red');
   }
+}
+
+async function triggerScan() {
+  const btn = document.getElementById('scan-btn');
+  if (btn) { btn.textContent = '⏳ Scanning...'; btn.disabled = true; }
+  try {
+    await fetch('/api/scan', {method: 'POST'});
+    pushActivity('SCAN', 'Manual scan triggered — watching for signals...', 'amber');
+    showPage('dashboard'); // switch to dashboard to see live feed
+  } catch(err) {
+    pushActivity('ERROR', `Scan failed: ${err.message}`, 'red');
+  }
+  setTimeout(() => {
+    if (btn) { btn.textContent = '⚡ Scan All Now'; btn.disabled = false; }
+  }, 5000);
 }
 
 async function removeFromWatchlist(ticker) {

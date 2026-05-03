@@ -24,7 +24,26 @@ async def lifespan(app: FastAPI):
     # ── Startup ──────────────────────────────────────────────────────────────
     init_db()
 
-    for ticker in os.getenv("WATCHLIST", "AAPL,TSLA,NVDA,MSFT,SPY").split(","):
+    # Default watchlist — 58 diversified tickers across sectors
+    _DEFAULT_WATCHLIST = (
+        # Tech mega-cap
+        "AAPL,MSFT,NVDA,GOOGL,META,AMZN,TSLA,AMD,AVGO,QCOM,ORCL,CRM,ADBE,NFLX,INTC,"
+        # Finance
+        "JPM,BAC,V,MA,GS,MS,BRK-B,AXP,"
+        # Healthcare
+        "UNH,LLY,JNJ,ABBV,MRK,PFE,"
+        # Energy
+        "XOM,CVX,COP,SLB,"
+        # Consumer & Retail
+        "WMT,COST,HD,MCD,PG,"
+        # ETFs
+        "SPY,QQQ,IWM,XLK,XLF,GLD,"
+        # High-growth / momentum
+        "PLTR,COIN,UBER,SNOW,CRWD,DDOG,RBLX,ZS,"
+        # Semis & Global
+        "TSM,ASML,MU,NVO,SHOP,SPOT"
+    )
+    for ticker in os.getenv("WATCHLIST", _DEFAULT_WATCHLIST).split(","):
         t = ticker.strip().upper()
         if t:
             add_to_watchlist(t)
@@ -37,6 +56,9 @@ async def lifespan(app: FastAPI):
         setup_scheduler(get_pm(), get_cio(), broadcast)
     except Exception as e:
         print(f"[WARNING] Scheduler/agent setup failed: {e}")
+
+    # Startup scan: run once 90s after boot so the fund isn't idle on fresh deploy
+    asyncio.create_task(_delayed_startup_scan())
 
     print("=" * 50)
     print("  APEX CAPITAL MANAGEMENT — ONLINE")
@@ -178,6 +200,16 @@ async def analyze_ticker(req: AnalyzeRequest):
     return {"status": "started", "ticker": ticker}
 
 
+async def _delayed_startup_scan():
+    """Run one watchlist scan 90s after startup so the fund isn't idle on fresh deploy."""
+    await asyncio.sleep(90)
+    try:
+        from core.scheduler import run_watchlist_scan
+        await run_watchlist_scan(get_cio(), get_pm(), broadcast)
+    except Exception as e:
+        print(f"[Startup scan] Error: {e}")
+
+
 async def _run_analysis(ticker: str):
     try:
         result = await get_cio().run_pipeline(ticker)
@@ -238,6 +270,23 @@ async def api_watchlist_add(req: WatchlistReq):
 async def api_watchlist_remove(ticker: str):
     remove_from_watchlist(ticker.upper())
     return {"status": "removed", "ticker": ticker.upper()}
+
+
+# ─── Manual Scan ─────────────────────────────────────────────────────────────
+
+@app.post("/api/scan")
+async def api_scan():
+    """Trigger a full watchlist scan immediately (same logic as scheduled scan)."""
+    asyncio.create_task(_run_scan())
+    return {"status": "started", "message": "Watchlist scan triggered"}
+
+
+async def _run_scan():
+    try:
+        from core.scheduler import run_watchlist_scan
+        await run_watchlist_scan(get_cio(), get_pm(), broadcast)
+    except Exception as e:
+        await broadcast({"type": "pipeline_error", "ticker": "SCAN", "error": str(e)})
 
 
 # ─── Reports ─────────────────────────────────────────────────────────────────
