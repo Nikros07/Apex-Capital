@@ -7,25 +7,62 @@ import yfinance as yf
 
 
 def _fetch_ohlcv_sync(ticker: str, period: str) -> pd.DataFrame:
-    t = yf.Ticker(ticker)
-    return t.history(period=period)
+    import time
+    for attempt in range(3):
+        try:
+            t = yf.Ticker(ticker)
+            df = t.history(period=period)
+            if df is not None and not df.empty:
+                return df
+        except Exception:
+            pass
+        if attempt < 2:
+            time.sleep(2 ** attempt)  # 1s, 2s backoff
+    return pd.DataFrame()
 
 
 def _fetch_info_sync(ticker: str) -> dict:
-    t = yf.Ticker(ticker)
-    return t.info or {}
+    import time
+    for attempt in range(3):
+        try:
+            t = yf.Ticker(ticker)
+            info = t.info
+            if info:
+                return info
+        except Exception:
+            pass
+        if attempt < 2:
+            time.sleep(2 ** attempt)
+    return {}
 
 
 def _fetch_price_sync(ticker: str) -> float:
-    t = yf.Ticker(ticker)
-    info = t.info or {}
-    price = (
-        info.get("regularMarketPrice")
-        or info.get("currentPrice")
-        or info.get("previousClose")
-        or 0.0
-    )
-    return float(price)
+    """
+    Fast price fetch: uses fast_info.last_price (single lightweight call,
+    much less likely to be rate-limited than t.info). Falls back to
+    2-day history close if fast_info fails.
+    """
+    import time
+    for attempt in range(3):
+        try:
+            t = yf.Ticker(ticker)
+            # fast_info is a single cheap API call — no quoteSummary, no 429
+            price = t.fast_info.last_price
+            if price and float(price) > 0:
+                return float(price)
+        except Exception:
+            pass
+        # Fallback: last close from 2-day history
+        try:
+            t = yf.Ticker(ticker)
+            hist = t.history(period="2d")
+            if hist is not None and not hist.empty:
+                return float(hist["Close"].iloc[-1])
+        except Exception:
+            pass
+        if attempt < 2:
+            time.sleep(1 + attempt)
+    return 0.0
 
 
 async def fetch_ohlcv(ticker: str, period: str = "6mo") -> Optional[pd.DataFrame]:

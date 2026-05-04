@@ -158,6 +158,9 @@ async def run_watchlist_scan(cio, portfolio_manager, broadcast_fn) -> dict:
             print(f"[Scheduler] Scan error {ticker}: {e}")
             skipped.append(ticker)
 
+        # Throttle: 400ms between each ticker to avoid Yahoo Finance rate limits
+        await asyncio.sleep(0.4)
+
     summary = {
         "scanned": len(watchlist),
         "triggered": len(triggered),
