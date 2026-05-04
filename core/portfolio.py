@@ -10,6 +10,8 @@ from utils.db import (
 
 class PortfolioManager:
     INITIAL_VALUE = 10_000.0
+    MAX_POSITIONS = 8          # never hold more than 8 open positions at once
+    MIN_CASH_RESERVE_PCT = 0.10  # always keep at least 10% of portfolio in cash
 
     def __init__(self, broadcast: Optional[Callable] = None):
         self._broadcast_fn = broadcast
@@ -48,13 +50,27 @@ class PortfolioManager:
 
         portfolio = get_portfolio()
         cash_eur = float(portfolio.get("cash_eur", 0))
+        total_value = float(portfolio.get("total_value", self.INITIAL_VALUE))
         positions = dict(portfolio.get("positions", {}))
 
         if ticker in positions:
             return {"success": False, "reason": f"Already holding {ticker}"}
 
-        if position_size_eur > cash_eur:
-            position_size_eur = cash_eur * 0.95
+        # Hedge fund rule: max open positions
+        if len(positions) >= self.MAX_POSITIONS:
+            return {
+                "success": False,
+                "reason": f"Max positions reached ({self.MAX_POSITIONS}) — wait for a sell before buying",
+            }
+
+        # Hedge fund rule: keep min 10% cash reserve
+        min_cash = total_value * self.MIN_CASH_RESERVE_PCT
+        available_cash = cash_eur - min_cash
+        if available_cash <= 0:
+            return {"success": False, "reason": "Cash below minimum reserve (10% of portfolio)"}
+
+        if position_size_eur > available_cash:
+            position_size_eur = available_cash * 0.95
 
         shares = position_size_eur / current_price
 

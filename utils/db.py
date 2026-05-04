@@ -79,8 +79,11 @@ def init_db():
 
 @contextmanager
 def get_conn():
-    conn = sqlite3.connect(DB_PATH)
+    conn = sqlite3.connect(DB_PATH, timeout=10)
     conn.row_factory = sqlite3.Row
+    # WAL mode: allows concurrent reads while a write is in progress
+    conn.execute("PRAGMA journal_mode=WAL")
+    conn.execute("PRAGMA synchronous=NORMAL")
     try:
         yield conn
         conn.commit()
@@ -157,6 +160,16 @@ def get_recent_trades(limit: int = 50):
     with get_conn() as conn:
         rows = conn.execute(
             "SELECT * FROM trades ORDER BY timestamp DESC LIMIT ?", (limit,)
+        ).fetchall()
+        return [dict(r) for r in rows]
+
+
+def get_trades_today():
+    """Return all trades with a timestamp on today's UTC date."""
+    today_start = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0).isoformat()
+    with get_conn() as conn:
+        rows = conn.execute(
+            "SELECT * FROM trades WHERE timestamp >= ? ORDER BY timestamp", (today_start,)
         ).fetchall()
         return [dict(r) for r in rows]
 

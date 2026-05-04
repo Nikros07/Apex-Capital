@@ -98,5 +98,12 @@ def _fetch_reddit_sync(ticker: str) -> dict:
 
 
 async def fetch_reddit_sentiment(ticker: str) -> dict:
-    loop = asyncio.get_event_loop()
-    return await loop.run_in_executor(None, partial(_fetch_reddit_sync, ticker))
+    loop = asyncio.get_running_loop()
+    try:
+        return await loop.run_in_executor(None, partial(_fetch_reddit_sync, ticker))
+    except Exception as e:
+        return {
+            "posts": [], "bull_count": 0, "bear_count": 0,
+            "total_mentions": 0, "raw_sentiment_score": 0.5,
+            "top_post": None, "error": str(e),
+        }
