@@ -405,9 +405,9 @@ async def run_forced_trade(cio, portfolio_manager, broadcast_fn) -> dict:
         await asyncio.sleep(0.3)
 
     scores.sort(key=lambda x: x[1], reverse=True)
-    top_3 = scores[:3]
+    top_5 = scores[:5]  # try top 5 so already-held tickers don't block us
 
-    for ticker, score in top_3:
+    for ticker, score in top_5:
         try:
             if broadcast_fn:
                 await broadcast_fn({
