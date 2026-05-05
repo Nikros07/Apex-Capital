@@ -177,10 +177,11 @@ async def _daily_min_trade_job():
 # ─── Public scan functions ────────────────────────────────────────────────────
 
 async def run_watchlist_scan(cio, portfolio_manager, broadcast_fn,
-                              vol_threshold: float = 1.5) -> dict:
+                              vol_threshold: float = 1.2) -> dict:
     """
     Scan all watchlist tickers for signals; run full pipeline on hits.
     Returns summary dict. Called by scheduler jobs and /api/scan endpoint.
+    Guarantees at least 1 trade per call via run_forced_trade fallback.
     """
     if not cio:
         return {"error": "CIO not initialised"}
@@ -191,6 +192,7 @@ async def run_watchlist_scan(cio, portfolio_manager, broadcast_fn,
     watchlist = get_watchlist()
     triggered = []
     skipped = []
+    traded = []
 
     if broadcast_fn:
         await broadcast_fn({
@@ -213,11 +215,12 @@ async def run_watchlist_scan(cio, portfolio_manager, broadcast_fn,
             ema_cross = ind.get("ema_crossover", "NONE") or "NONE"
             macd_diff = ind.get("macd_diff", 0) or 0
 
+            # Relaxed thresholds — cast wider net
             should_run = (
-                rsi < 35 or rsi > 65
+                rsi < 40 or rsi > 60
                 or vol_ratio > vol_threshold
                 or ema_cross in ("GOLDEN_CROSS", "DEATH_CROSS")
-                or abs(macd_diff) > 0.5
+                or abs(macd_diff) > 0.3
             )
 
             if should_run:
@@ -243,7 +246,9 @@ async def run_watchlist_scan(cio, portfolio_manager, broadcast_fn,
                             result.get("reports", {}).get("risk", {}).get("risk_verdict", "")
                         )
                         if risk_verdict != "CRITICAL" and portfolio_manager:
-                            await portfolio_manager.execute_buy(ticker, result)
+                            trade = await portfolio_manager.execute_buy(ticker, result)
+                            if trade.get("success"):
+                                traded.append(ticker)
                     update_watchlist_signal(ticker, verdict)
                 except Exception as pipe_err:
                     print(f"[Scheduler] Pipeline error {ticker}: {pipe_err}")
@@ -263,15 +268,29 @@ async def run_watchlist_scan(cio, portfolio_manager, broadcast_fn,
         "scanned": len(watchlist),
         "triggered": len(triggered),
         "tickers_triggered": triggered,
+        "traded": traded,
         "skipped": len(skipped),
     }
     if broadcast_fn:
         await broadcast_fn({
             "type": "watchlist_trigger",
             "ticker": "ALL",
-            "message": f"Scan complete — {len(triggered)}/{len(watchlist)} triggered",
+            "message": f"Scan complete — {len(triggered)}/{len(watchlist)} triggered, {len(traded)} trade(s)",
             "reason": f"Triggered: {', '.join(triggered) or 'none'}",
         })
+
+    # Guarantee at least 1 trade per scan — if nothing traded, force top scorer
+    if not traded:
+        if broadcast_fn:
+            await broadcast_fn({
+                "type": "watchlist_trigger",
+                "ticker": "SYSTEM",
+                "message": "No trades from signal scan — running forced analysis on top scorer...",
+                "reason": "",
+            })
+        forced = await run_forced_trade(cio, portfolio_manager, broadcast_fn)
+        summary["forced_trade"] = forced
+
     return summary
 
 
@@ -344,6 +363,20 @@ async def run_deep_scan(cio, portfolio_manager, broadcast_fn) -> dict:
             "message": f"Deep scan complete — {len(traded)} trade(s) executed",
             "reason": f"Bought: {', '.join(traded) or 'none'}",
         })
+
+    # Guarantee at least 1 trade — if top 10 all came back WAIT/PASS, force the best
+    if not traded:
+        if broadcast_fn:
+            await broadcast_fn({
+                "type": "watchlist_trigger",
+                "ticker": "SYSTEM",
+                "message": "Deep scan: no INVEST verdict in top 10 — forcing best opportunity...",
+                "reason": "",
+            })
+        forced = await run_forced_trade(cio, portfolio_manager, broadcast_fn)
+        return {"scanned": len(watchlist), "analyzed": len(top_10), "traded": traded,
+                "forced_trade": forced}
+
     return {"scanned": len(watchlist), "analyzed": len(top_10), "traded": traded}
 
 

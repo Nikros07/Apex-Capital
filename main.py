@@ -289,9 +289,14 @@ async def api_scan():
 
 
 async def _run_scan():
+    """
+    Manual scan triggered by /api/scan ("Scan All Now" button).
+    Uses run_deep_scan: scores all tickers, always analyses top 10,
+    guaranteed to execute at least 1 trade via forced-trade fallback.
+    """
     try:
-        from core.scheduler import run_watchlist_scan
-        await run_watchlist_scan(get_cio(), get_pm(), broadcast)
+        from core.scheduler import run_deep_scan
+        await run_deep_scan(get_cio(), get_pm(), broadcast)
     except Exception as e:
         await broadcast({"type": "pipeline_error", "ticker": "SCAN", "error": str(e)})
 
