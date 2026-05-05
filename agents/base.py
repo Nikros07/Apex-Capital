@@ -93,34 +93,64 @@ class BaseAgent:
         return json.dumps({"error": "max retries exceeded"})
 
     async def search(self, query: str) -> list[dict]:
+        """
+        Search with automatic fallback chain:
+          1. Tavily (if TAVILY_API_KEY set and credits remain)
+          2. DuckDuckGo (free, no key needed)
+        """
         key = os.getenv("TAVILY_API_KEY", "")
-        if not key:
-            return []
+        if key:
+            try:
+                async with httpx.AsyncClient(timeout=15.0) as client:
+                    resp = await client.post(
+                        "https://api.tavily.com/search",
+                        json={
+                            "api_key": key,
+                            "query": query,
+                            "search_depth": "basic",
+                            "max_results": 5,
+                            "include_answer": True,
+                        },
+                    )
+                    if resp.status_code == 200:
+                        data = resp.json()
+                        results = data.get("results", [])
+                        if data.get("answer"):
+                            results.insert(0, {
+                                "title": "Summary",
+                                "content": data["answer"],
+                                "url": "",
+                            })
+                        return results
+                    # 402 = out of credits, 429 = rate limit → fall through to DDG
+                    if resp.status_code not in (402, 429):
+                        return []  # unexpected error, skip search
+            except Exception:
+                pass
+
+        # Free fallback — DuckDuckGo (no API key, no credits)
+        return await self._search_ddg(query)
+
+    async def _search_ddg(self, query: str) -> list[dict]:
+        """DuckDuckGo search — completely free, no key required."""
+        loop = asyncio.get_running_loop()
         try:
-            async with httpx.AsyncClient(timeout=15.0) as client:
-                resp = await client.post(
-                    "https://api.tavily.com/search",
-                    json={
-                        "api_key": key,
-                        "query": query,
-                        "search_depth": "basic",
-                        "max_results": 5,
-                        "include_answer": True,
-                    },
-                )
-                if resp.status_code == 200:
-                    data = resp.json()
-                    results = data.get("results", [])
-                    if data.get("answer"):
-                        results.insert(0, {
-                            "title": "Summary",
-                            "content": data["answer"],
-                            "url": "",
-                        })
-                    return results
-        except Exception:
-            pass
-        return []
+            def _ddg_sync():
+                from duckduckgo_search import DDGS
+                with DDGS() as ddgs:
+                    hits = list(ddgs.text(query, max_results=5))
+                return [
+                    {
+                        "title": h.get("title", ""),
+                        "content": h.get("body", "")[:400],
+                        "url": h.get("href", ""),
+                    }
+                    for h in hits
+                ]
+            return await loop.run_in_executor(None, _ddg_sync)
+        except Exception as e:
+            print(f"[Search] DuckDuckGo fallback failed for '{query}': {e}")
+            return []
 
     async def search_multiple(self, queries: list[str]) -> list[dict]:
         tasks = [self.search(q) for q in queries]
