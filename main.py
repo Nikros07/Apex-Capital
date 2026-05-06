@@ -328,6 +328,114 @@ async def api_price(ticker: str):
     return {"ticker": t, "price": price, "indicators": ind}
 
 
+# ─── API Key / Model Tester ───────────────────────────────────────────────────
+
+@app.get("/api/test-keys")
+async def api_test_keys():
+    """
+    Test every configured OpenRouter key against every free model.
+    Returns per-key status and per-model latency/availability.
+    Useful for debugging rate-limits, missing keys, or model outages.
+    """
+    import time
+    import httpx
+    from agents.base import FREE_MODELS
+    from utils.key_manager import KeyManager
+
+    km = KeyManager.get_instance()
+    results = {"keys": {}, "models": {}, "summary": {}}
+
+    # Collect all configured keys
+    raw_keys: dict[str, str] = {}
+    for i in range(1, 11):
+        val = os.getenv(f"OPENROUTER_KEY_{i}", "")
+        if val:
+            raw_keys[f"OPENROUTER_KEY_{i}"] = val
+
+    if not raw_keys:
+        return {
+            "error": "No OpenRouter keys found. Set OPENROUTER_KEY_1 in Railway Variables.",
+            "keys": {},
+            "models": {},
+        }
+
+    OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
+
+    # Test each key × each model (lightweight ping: 5 tokens max)
+    async with httpx.AsyncClient(timeout=20.0) as client:
+        for key_name, key_val in raw_keys.items():
+            results["keys"][key_name] = {"status": "unknown", "models_ok": [], "models_fail": []}
+            any_ok = False
+
+            for model in FREE_MODELS:
+                t0 = time.monotonic()
+                try:
+                    resp = await client.post(
+                        OPENROUTER_URL,
+                        headers={
+                            "Authorization": f"Bearer {key_val}",
+                            "Content-Type": "application/json",
+                            "HTTP-Referer": "https://apexcapital.ai",
+                            "X-Title": "Apex Capital Management",
+                        },
+                        json={
+                            "model": model,
+                            "messages": [{"role": "user", "content": "Reply: OK"}],
+                            "max_tokens": 5,
+                            "temperature": 0,
+                        },
+                    )
+                    latency_ms = int((time.monotonic() - t0) * 1000)
+                    code = resp.status_code
+
+                    if code == 200:
+                        status = "ok"
+                        any_ok = True
+                        results["keys"][key_name]["models_ok"].append(model)
+                    elif code == 429:
+                        status = "rate_limited"
+                        results["keys"][key_name]["models_fail"].append(f"{model}:429")
+                    elif code == 402:
+                        status = "no_credits"
+                        results["keys"][key_name]["models_fail"].append(f"{model}:402")
+                    elif code == 403:
+                        status = "forbidden"
+                        results["keys"][key_name]["models_fail"].append(f"{model}:403")
+                    else:
+                        status = f"http_{code}"
+                        results["keys"][key_name]["models_fail"].append(f"{model}:{code}")
+
+                    model_entry = results["models"].setdefault(model, {"ok_keys": [], "fail_keys": [], "avg_ms": []})
+                    if status == "ok":
+                        model_entry["ok_keys"].append(key_name)
+                        model_entry["avg_ms"].append(latency_ms)
+                    else:
+                        model_entry["fail_keys"].append(f"{key_name}:{status}")
+
+                except Exception as ex:
+                    results["keys"][key_name]["models_fail"].append(f"{model}:error({ex})")
+
+            results["keys"][key_name]["status"] = "ok" if any_ok else "all_models_failed"
+
+    # Compute per-model averages
+    for model, data in results["models"].items():
+        ms_list = data.pop("avg_ms", [])
+        data["avg_latency_ms"] = int(sum(ms_list) / len(ms_list)) if ms_list else None
+
+    # Summary
+    ok_keys = [k for k, v in results["keys"].items() if v["status"] == "ok"]
+    ok_models = [m for m, v in results["models"].items() if v["ok_keys"]]
+    results["summary"] = {
+        "keys_configured": len(raw_keys),
+        "keys_working": len(ok_keys),
+        "models_available": len(ok_models),
+        "models_total": len(FREE_MODELS),
+        "ready": len(ok_keys) > 0 and len(ok_models) > 0,
+    }
+
+    return results
+
+
 if __name__ == "__main__":
     import uvicorn
     port = int(os.getenv("PORT", 8000))

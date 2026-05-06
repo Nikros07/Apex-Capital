@@ -1,4 +1,5 @@
 import asyncio
+from datetime import datetime
 from functools import partial
 from typing import Optional
 
@@ -6,18 +7,19 @@ import pandas as pd
 import yfinance as yf
 
 
+# ─── Raw sync fetchers ────────────────────────────────────────────────────────
+
 def _fetch_ohlcv_sync(ticker: str, period: str) -> pd.DataFrame:
     import time
     for attempt in range(3):
         try:
-            t = yf.Ticker(ticker)
-            df = t.history(period=period)
+            df = yf.Ticker(ticker).history(period=period)
             if df is not None and not df.empty:
                 return df
         except Exception:
             pass
         if attempt < 2:
-            time.sleep(2 ** attempt)  # 1s, 2s backoff
+            time.sleep(2 ** attempt)
     return pd.DataFrame()
 
 
@@ -25,8 +27,7 @@ def _fetch_info_sync(ticker: str) -> dict:
     import time
     for attempt in range(3):
         try:
-            t = yf.Ticker(ticker)
-            info = t.info
+            info = yf.Ticker(ticker).info
             if info:
                 return info
         except Exception:
@@ -37,25 +38,16 @@ def _fetch_info_sync(ticker: str) -> dict:
 
 
 def _fetch_price_sync(ticker: str) -> float:
-    """
-    Fast price fetch: uses fast_info.last_price (single lightweight call,
-    much less likely to be rate-limited than t.info). Falls back to
-    2-day history close if fast_info fails.
-    """
     import time
     for attempt in range(3):
         try:
-            t = yf.Ticker(ticker)
-            # fast_info is a single cheap API call — no quoteSummary, no 429
-            price = t.fast_info.last_price
+            price = yf.Ticker(ticker).fast_info.last_price
             if price and float(price) > 0:
                 return float(price)
         except Exception:
             pass
-        # Fallback: last close from 2-day history
         try:
-            t = yf.Ticker(ticker)
-            hist = t.history(period="2d")
+            hist = yf.Ticker(ticker).history(period="2d")
             if hist is not None and not hist.empty:
                 return float(hist["Close"].iloc[-1])
         except Exception:
@@ -64,6 +56,29 @@ def _fetch_price_sync(ticker: str) -> float:
             time.sleep(1 + attempt)
     return 0.0
 
+
+def _fetch_next_earnings_sync(ticker: str) -> Optional[str]:
+    """Return next earnings date as ISO string, or None."""
+    try:
+        t = yf.Ticker(ticker)
+        cal = t.calendar
+        # Modern yfinance returns a dict
+        if isinstance(cal, dict):
+            dates = cal.get("Earnings Date", [])
+            if dates:
+                d = dates[0]
+                return d.isoformat() if hasattr(d, "isoformat") else str(d)
+        # Older yfinance returns a DataFrame
+        elif hasattr(cal, "empty") and not cal.empty:
+            if "Earnings Date" in cal.index:
+                val = cal.loc["Earnings Date"].iloc[0]
+                return val.isoformat() if hasattr(val, "isoformat") else str(val)
+    except Exception:
+        pass
+    return None
+
+
+# ─── Async wrappers ───────────────────────────────────────────────────────────
 
 async def fetch_ohlcv(ticker: str, period: str = "6mo") -> Optional[pd.DataFrame]:
     loop = asyncio.get_running_loop()
@@ -89,6 +104,23 @@ async def fetch_current_price(ticker: str) -> float:
         return 0.0
 
 
+async def fetch_vix() -> float:
+    """Return current VIX level (fear index). Defaults to 20 on failure."""
+    price = await fetch_current_price("^VIX")
+    return price if price > 0 else 20.0
+
+
+async def fetch_next_earnings(ticker: str) -> Optional[str]:
+    """Return next earnings date as ISO string, or None if unknown."""
+    loop = asyncio.get_running_loop()
+    try:
+        return await loop.run_in_executor(None, partial(_fetch_next_earnings_sync, ticker))
+    except Exception:
+        return None
+
+
+# ─── Indicator computation ────────────────────────────────────────────────────
+
 def compute_indicators(df: pd.DataFrame) -> dict:
     if df is None or df.empty or len(df) < 20:
         return {}
@@ -98,49 +130,49 @@ def compute_indicators(df: pd.DataFrame) -> dict:
     except ImportError:
         return {"current_price": float(df["Close"].iloc[-1])}
 
-    close = df["Close"]
-    high = df["High"]
-    low = df["Low"]
+    close  = df["Close"]
+    high   = df["High"]
+    low    = df["Low"]
     volume = df["Volume"]
 
     current_price = float(close.iloc[-1])
+    rsi_val       = float(ta.momentum.RSIIndicator(close, window=14).rsi().iloc[-1])
 
-    rsi_val = float(ta.momentum.RSIIndicator(close, window=14).rsi().iloc[-1])
     ema20_series = ta.trend.EMAIndicator(close, window=20).ema_indicator()
-    ema20 = float(ema20_series.iloc[-1])
+    ema20        = float(ema20_series.iloc[-1])
 
     ema50 = None
     ema_crossover = "NONE"
     if len(df) >= 50:
         ema50_series = ta.trend.EMAIndicator(close, window=50).ema_indicator()
-        ema50 = float(ema50_series.iloc[-1])
-        ema20_prev = float(ema20_series.iloc[-2])
-        ema50_prev = float(ema50_series.iloc[-2])
+        ema50        = float(ema50_series.iloc[-1])
+        ema20_prev   = float(ema20_series.iloc[-2])
+        ema50_prev   = float(ema50_series.iloc[-2])
         if ema20 > ema50 and ema20_prev <= ema50_prev:
             ema_crossover = "GOLDEN_CROSS"
         elif ema20 < ema50 and ema20_prev >= ema50_prev:
             ema_crossover = "DEATH_CROSS"
 
-    macd_ind = ta.trend.MACD(close)
-    macd_val = float(macd_ind.macd().iloc[-1])
+    macd_ind   = ta.trend.MACD(close)
+    macd_val   = float(macd_ind.macd().iloc[-1])
     macd_signal = float(macd_ind.macd_signal().iloc[-1])
-    macd_diff = float(macd_ind.macd_diff().iloc[-1])
+    macd_diff  = float(macd_ind.macd_diff().iloc[-1])
 
-    _atr_series = ta.volatility.AverageTrueRange(high, low, close, window=14).average_true_range()
-    atr_raw = _atr_series.iloc[-1]
-    atr_val = float(atr_raw) if not (atr_raw != atr_raw) else current_price * 0.02  # NaN fallback
+    atr_series = ta.volatility.AverageTrueRange(high, low, close, window=14).average_true_range()
+    atr_raw    = atr_series.iloc[-1]
+    atr_val    = float(atr_raw) if not (atr_raw != atr_raw) else current_price * 0.02
 
-    bb = ta.volatility.BollingerBands(close, window=20)
-    bb_upper = float(bb.bollinger_hband().iloc[-1])
-    bb_lower = float(bb.bollinger_lband().iloc[-1])
-    bb_mid = float(bb.bollinger_mavg().iloc[-1])
+    bb         = ta.volatility.BollingerBands(close, window=20)
+    bb_upper   = float(bb.bollinger_hband().iloc[-1])
+    bb_lower   = float(bb.bollinger_lband().iloc[-1])
+    bb_mid     = float(bb.bollinger_mavg().iloc[-1])
 
-    vol_avg_20 = float(volume.rolling(20).mean().iloc[-1])
+    vol_avg_20  = float(volume.rolling(20).mean().iloc[-1])
     vol_current = float(volume.iloc[-1])
-    vol_ratio = vol_current / vol_avg_20 if vol_avg_20 > 0 else 1.0
+    vol_ratio   = vol_current / vol_avg_20 if vol_avg_20 > 0 else 1.0
 
     resistance = float(high.rolling(20).max().iloc[-1])
-    support = float(low.rolling(20).min().iloc[-1])
+    support    = float(low.rolling(20).min().iloc[-1])
 
     if ema50:
         trend = "UPTREND" if ema20 > ema50 else "DOWNTREND"
@@ -149,20 +181,20 @@ def compute_indicators(df: pd.DataFrame) -> dict:
 
     return {
         "current_price": round(current_price, 4),
-        "rsi": round(rsi_val, 2),
-        "ema20": round(ema20, 4),
-        "ema50": round(ema50, 4) if ema50 else None,
-        "macd": round(macd_val, 6),
-        "macd_signal": round(macd_signal, 6),
-        "macd_diff": round(macd_diff, 6),
-        "atr": round(atr_val, 4),
-        "bb_upper": round(bb_upper, 4),
-        "bb_lower": round(bb_lower, 4),
-        "bb_mid": round(bb_mid, 4),
-        "volume_ratio": round(vol_ratio, 2),
-        "support": round(support, 4),
-        "resistance": round(resistance, 4),
-        "trend": trend,
+        "rsi":           round(rsi_val, 2),
+        "ema20":         round(ema20, 4),
+        "ema50":         round(ema50, 4) if ema50 else None,
+        "macd":          round(macd_val, 6),
+        "macd_signal":   round(macd_signal, 6),
+        "macd_diff":     round(macd_diff, 6),
+        "atr":           round(atr_val, 4),
+        "bb_upper":      round(bb_upper, 4),
+        "bb_lower":      round(bb_lower, 4),
+        "bb_mid":        round(bb_mid, 4),
+        "volume_ratio":  round(vol_ratio, 2),
+        "support":       round(support, 4),
+        "resistance":    round(resistance, 4),
+        "trend":         trend,
         "ema_crossover": ema_crossover,
     }
 

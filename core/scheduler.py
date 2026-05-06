@@ -27,11 +27,18 @@ def setup_scheduler(portfolio_manager: "PortfolioManager",
 
     _scheduler = AsyncIOScheduler(timezone="Europe/Berlin")
 
-    # ── Position monitoring: every 15 min, Mon–Fri 08:00–23:00 CET ──────────
+    # ── Position monitoring: every 5 min, Mon–Fri 08:00–23:00 CET ───────────
     _scheduler.add_job(
         _monitor_job,
-        CronTrigger(minute="*/15", hour="8-23", day_of_week="mon-fri"),
-        id="position_monitor", replace_existing=True, misfire_grace_time=120,
+        CronTrigger(minute="*/5", hour="8-23", day_of_week="mon-fri"),
+        id="position_monitor", replace_existing=True, misfire_grace_time=60,
+    )
+
+    # ── Morning position briefing: 08:01 CET ──────────────────────────────────
+    _scheduler.add_job(
+        _morning_briefing_job,
+        CronTrigger(hour=8, minute=1, day_of_week="mon-fri"),
+        id="morning_briefing", replace_existing=True, misfire_grace_time=300,
     )
 
     # ── European pre-open scan: 08:00 CET ────────────────────────────────────
@@ -82,7 +89,7 @@ def setup_scheduler(portfolio_manager: "PortfolioManager",
     _scheduler.start()
     print(
         "[Scheduler] Started — hedge fund mode: 6 daily scans + deep pre-market scan, "
-        "15-min position monitor, 21:30 daily-min-trade enforcer."
+        "5-min position monitor, 08:01 morning briefing, 21:30 daily-min-trade enforcer."
     )
     return _scheduler
 
@@ -463,12 +470,12 @@ async def run_forced_trade(cio, portfolio_manager, broadcast_fn) -> dict:
             # Skip if already held or portfolio full
             if ticker in positions:
                 continue
-            if len(positions) >= 8:
+            if len(positions) >= 15:
                 if broadcast_fn:
                     await broadcast_fn({
                         "type": "watchlist_trigger",
                         "ticker": "SYSTEM",
-                        "message": "Hard-forced buy skipped: max positions (8) reached.",
+                        "message": "Hard-forced buy skipped: max positions (15) reached.",
                         "reason": "",
                     })
                 break
@@ -507,6 +514,7 @@ async def run_forced_trade(cio, portfolio_manager, broadcast_fn) -> dict:
                         "stop_loss": round(price - stop_distance, 4),
                         "take_profit": round(price + 2.5 * atr, 4),
                         "rr_ratio": round(2.5 * atr / stop_distance, 2),
+                        "atr": round(atr, 4),
                         "risk_verdict": "ACCEPTABLE",
                     },
                 },
@@ -536,6 +544,53 @@ async def run_forced_trade(cio, portfolio_manager, broadcast_fn) -> dict:
             "reason": "",
         })
     return {"success": False, "reason": "No eligible tickers or insufficient cash"}
+
+
+async def _morning_briefing_job():
+    """
+    08:01 CET — broadcast a morning briefing with all open positions,
+    overnight P&L, key levels, and today's plan.
+    """
+    try:
+        from utils.db import get_portfolio
+        portfolio = get_portfolio()
+        positions = portfolio.get("positions", {})
+        cash = float(portfolio.get("cash_eur", 0))
+        total = float(portfolio.get("total_value", 10000))
+        pnl = float(portfolio.get("total_pnl_eur", 0))
+        pnl_pct = float(portfolio.get("total_pnl_pct", 0))
+
+        lines = [
+            "🌅 MORNING BRIEFING — Apex Capital Management",
+            f"Portfolio: €{total:,.2f}  |  Cash: €{cash:,.2f}  |  PnL: {pnl:+.2f} EUR ({pnl_pct:+.2f}%)",
+            f"Open positions: {len(positions)}",
+        ]
+
+        for ticker, pos in positions.items():
+            entry = float(pos.get("entry_price", 0))
+            cur   = float(pos.get("current_price", entry))
+            sl    = float(pos.get("trailing_stop") or pos.get("stop_loss") or 0)
+            tp    = float(pos.get("take_profit") or 0)
+            pnl_p = float(pos.get("pnl_pct", 0))
+            lines.append(
+                f"  • {ticker}: entry={entry:.2f}  now={cur:.2f}  "
+                f"trail_SL={sl:.2f}  TP={tp:.2f}  PnL={pnl_p:+.2f}%"
+            )
+
+        if not positions:
+            lines.append("  — No open positions. Full scan launching at 08:00 EU open.")
+
+        message = "\n".join(lines)
+
+        if _broadcast:
+            await _broadcast({
+                "type": "morning_briefing",
+                "message": message,
+                "portfolio": portfolio,
+            })
+        print(f"[Scheduler] {message}")
+    except Exception as e:
+        print(f"[Scheduler] Morning briefing error: {e}")
 
 
 async def _monthly_report_job():
