@@ -9,7 +9,20 @@ import httpx
 from utils.key_manager import KeyManager
 
 OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
-MODEL = "meta-llama/llama-3.1-8b-instruct:free"
+
+# All free-tier models on OpenRouter — no credit needed, no balance required.
+# Rotated automatically when one is rate-limited or unavailable.
+FREE_MODELS = [
+    "meta-llama/llama-3.1-8b-instruct:free",
+    "meta-llama/llama-3.2-3b-instruct:free",
+    "mistralai/mistral-7b-instruct:free",
+    "google/gemma-3-12b-it:free",
+    "google/gemma-3-4b-it:free",
+    "qwen/qwen-2.5-7b-instruct:free",
+    "deepseek/deepseek-r1:free",
+    "nousresearch/hermes-3-llama-3.1-8b:free",
+]
+MODEL = FREE_MODELS[0]  # default — overridden per-call if rate-limited
 
 
 class BaseAgent:
@@ -37,12 +50,18 @@ class BaseAgent:
                        max_retries: int = 3) -> str:
         full_system = f"{self.personality_header}\n\n{system_prompt}"
 
-        for attempt in range(max_retries):
+        # Try every free model in rotation — move to next on 429 / error
+        model_index = 0
+
+        for attempt in range(max_retries * len(FREE_MODELS)):
             key = self.km.get_key(self.name)
             if key == "__no_key__":
                 return json.dumps({"error": "No OpenRouter API key configured. Add OPENROUTER_KEY_1 in Railway Variables."})
+
+            model = FREE_MODELS[model_index % len(FREE_MODELS)]
+
             try:
-                async with httpx.AsyncClient(timeout=90.0) as client:
+                async with httpx.AsyncClient(timeout=60.0) as client:
                     resp = await client.post(
                         OPENROUTER_URL,
                         headers={
@@ -52,45 +71,57 @@ class BaseAgent:
                             "X-Title": "Apex Capital Management",
                         },
                         json={
-                            "model": MODEL,
+                            "model": model,
                             "messages": [
                                 {"role": "system", "content": full_system},
                                 {"role": "user", "content": user_message},
                             ],
                             "temperature": 0.7,
-                            "max_tokens": 1024,
+                            "max_tokens": 800,
                         },
                     )
 
                     if resp.status_code == 429:
+                        # Rate-limited on this model → rotate key AND model
                         self.km.rotate_key(self.name)
-                        await asyncio.sleep(2)
+                        model_index += 1
+                        await asyncio.sleep(1)
+                        continue
+
+                    if resp.status_code in (402, 403):
+                        # Payment / permission error — skip this model entirely
+                        model_index += 1
                         continue
 
                     if resp.status_code != 200:
+                        model_index += 1
                         if attempt < max_retries - 1:
                             await asyncio.sleep(2)
-                            continue
-                        return json.dumps({"error": f"API error {resp.status_code}"})
+                        continue
 
                     data = resp.json()
                     choices = data.get("choices") or []
                     if not choices:
-                        return json.dumps({"error": "empty choices in response"})
-                    return (choices[0].get("message") or {}).get("content", "").strip()
+                        model_index += 1
+                        continue
+
+                    content = (choices[0].get("message") or {}).get("content", "").strip()
+                    if content:
+                        return content
+                    # Empty content — try next model
+                    model_index += 1
+                    continue
 
             except httpx.TimeoutException:
-                if attempt < max_retries - 1:
-                    await asyncio.sleep(3)
-                    continue
-                return json.dumps({"error": "timeout"})
+                model_index += 1
+                await asyncio.sleep(1)
+                continue
             except Exception as e:
-                if attempt < max_retries - 1:
-                    await asyncio.sleep(2)
-                    continue
-                return json.dumps({"error": str(e)})
+                model_index += 1
+                await asyncio.sleep(1)
+                continue
 
-        return json.dumps({"error": "max retries exceeded"})
+        return json.dumps({"error": "all free models exhausted or rate-limited"})
 
     async def search(self, query: str) -> list[dict]:
         """
