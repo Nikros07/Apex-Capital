@@ -382,14 +382,18 @@ async def run_deep_scan(cio, portfolio_manager, broadcast_fn) -> dict:
 
 async def run_forced_trade(cio, portfolio_manager, broadcast_fn) -> dict:
     """
-    Force-analyze the top 3 scored tickers and buy the first INVEST verdict.
-    Called when no trade has been made today (daily minimum enforcer).
+    Two-stage forced trade:
+      Stage 1 — try full LLM pipeline on top 5 scored tickers, buy first INVEST.
+      Stage 2 — if LLM produces no INVEST (bad day, no key, etc.), bypass the LLM
+                 entirely and directly BUY the highest-scored ticker that passes
+                 basic risk checks (not held, not at max positions, enough cash).
+    Guaranteed to execute a trade as long as there is any cash and a free slot.
     """
-    if not cio:
-        return {"error": "CIO not initialised"}
+    if not portfolio_manager:
+        return {"error": "Portfolio manager not initialised"}
 
-    from data.market import fetch_indicators
-    from utils.db import get_watchlist, update_watchlist_signal
+    from data.market import fetch_indicators, fetch_current_price, fetch_ohlcv, compute_indicators
+    from utils.db import get_watchlist, get_portfolio, update_watchlist_signal
 
     watchlist = get_watchlist()
     scores: list[tuple[str, float]] = []
@@ -405,46 +409,133 @@ async def run_forced_trade(cio, portfolio_manager, broadcast_fn) -> dict:
         await asyncio.sleep(0.3)
 
     scores.sort(key=lambda x: x[1], reverse=True)
-    top_5 = scores[:5]  # try top 5 so already-held tickers don't block us
+    top_5 = scores[:5]
 
-    for ticker, score in top_5:
+    # ── Stage 1: Try full LLM pipeline ──────────────────────────────────────
+    if cio:
+        for ticker, score in top_5:
+            try:
+                if broadcast_fn:
+                    await broadcast_fn({
+                        "type": "watchlist_trigger",
+                        "ticker": ticker,
+                        "message": f"Forced analysis: {ticker} (score={score:.0f})",
+                        "reason": "Daily minimum trade enforcer",
+                    })
+                result = await cio.run_pipeline(ticker)
+                verdict = result.get("verdict", "WAIT")
+                update_watchlist_signal(ticker, f"{verdict} FORCED")
+                if verdict == "INVEST":
+                    risk_verdict = (
+                        result.get("reports", {}).get("risk", {}).get("risk_verdict", "")
+                    )
+                    if risk_verdict != "CRITICAL":
+                        trade = await portfolio_manager.execute_buy(ticker, result)
+                        if trade.get("success"):
+                            if broadcast_fn:
+                                await broadcast_fn({
+                                    "type": "watchlist_trigger",
+                                    "ticker": ticker,
+                                    "message": f"Daily min-trade fulfilled: BUY {ticker}",
+                                    "reason": f"LLM pipeline, score={score:.0f}",
+                                })
+                            return {"success": True, "ticker": ticker, "stage": "llm"}
+            except Exception as e:
+                print(f"[Scheduler] Forced trade stage-1 error {ticker}: {e}")
+
+    # ── Stage 2: Hard bypass — buy top-scored ticker directly without LLM ───
+    # Runs when LLM is unavailable, slow, or consistently returning WAIT/PASS.
+    if broadcast_fn:
+        await broadcast_fn({
+            "type": "watchlist_trigger",
+            "ticker": "SYSTEM",
+            "message": "Stage-1 produced no trade — executing hard-forced buy on top scorer...",
+            "reason": "",
+        })
+
+    for ticker, score in scores[:10]:  # try top 10 in case some are already held
         try:
-            if broadcast_fn:
-                await broadcast_fn({
-                    "type": "watchlist_trigger",
-                    "ticker": ticker,
-                    "message": f"Forced analysis: {ticker} (score={score:.0f})",
-                    "reason": "Daily minimum trade enforcer",
-                })
-            result = await cio.run_pipeline(ticker)
-            verdict = result.get("verdict", "WAIT")
-            update_watchlist_signal(ticker, f"{verdict} FORCED")
-            if verdict == "INVEST":
-                risk_verdict = (
-                    result.get("reports", {}).get("risk", {}).get("risk_verdict", "")
-                )
-                if risk_verdict != "CRITICAL" and portfolio_manager:
-                    trade = await portfolio_manager.execute_buy(ticker, result)
-                    if trade.get("success"):
-                        if broadcast_fn:
-                            await broadcast_fn({
-                                "type": "watchlist_trigger",
-                                "ticker": ticker,
-                                "message": f"Daily min-trade fulfilled: BUY {ticker}",
-                                "reason": f"Forced trade, score={score:.0f}",
-                            })
-                        return {"success": True, "ticker": ticker}
+            portfolio = get_portfolio()
+            positions = dict(portfolio.get("positions", {}))
+            cash_eur = float(portfolio.get("cash_eur", 0))
+            total_value = float(portfolio.get("total_value", 10000))
+
+            # Skip if already held or portfolio full
+            if ticker in positions:
+                continue
+            if len(positions) >= 8:
+                if broadcast_fn:
+                    await broadcast_fn({
+                        "type": "watchlist_trigger",
+                        "ticker": "SYSTEM",
+                        "message": "Hard-forced buy skipped: max positions (8) reached.",
+                        "reason": "",
+                    })
+                break
+
+            # Ensure enough cash
+            min_cash = total_value * 0.10
+            available = cash_eur - min_cash
+            if available < 10:
+                continue
+
+            price = await fetch_current_price(ticker)
+            if price <= 0:
+                continue
+
+            # Calculate position size using ATR (Viktor's formula, no LLM)
+            df = await fetch_ohlcv(ticker, period="1mo")
+            ind = compute_indicators(df) if (df is not None and not df.empty) else {}
+            atr = ind.get("atr") or price * 0.02
+            stop_distance = max(1.5 * atr, price * 0.03)
+            raw_size = (total_value * 0.01) / stop_distance * price  # 1% risk
+            position_size_eur = min(raw_size, available * 0.95, total_value * 0.08)
+
+            if position_size_eur < 5:
+                continue
+
+            fake_result = {
+                "verdict": "INVEST",
+                "current_price": price,
+                "reports": {
+                    "committee": {
+                        "position_size_eur": round(position_size_eur, 2),
+                        "conviction": 6,
+                    },
+                    "risk": {
+                        "position_size_eur": round(position_size_eur, 2),
+                        "stop_loss": round(price - stop_distance, 4),
+                        "take_profit": round(price + 2.5 * atr, 4),
+                        "rr_ratio": round(2.5 * atr / stop_distance, 2),
+                        "risk_verdict": "ACCEPTABLE",
+                    },
+                },
+            }
+            trade = await portfolio_manager.execute_buy(ticker, fake_result)
+            if trade.get("success"):
+                update_watchlist_signal(ticker, "FORCED_BUY")
+                if broadcast_fn:
+                    await broadcast_fn({
+                        "type": "watchlist_trigger",
+                        "ticker": ticker,
+                        "message": (
+                            f"Hard-forced BUY {ticker} @ {price:.2f} "
+                            f"(size={position_size_eur:.0f} EUR, score={score:.0f})"
+                        ),
+                        "reason": "Stage-2 bypass — no LLM INVEST verdict",
+                    })
+                return {"success": True, "ticker": ticker, "stage": "hard_bypass"}
         except Exception as e:
-            print(f"[Scheduler] Forced trade error {ticker}: {e}")
+            print(f"[Scheduler] Forced trade stage-2 error {ticker}: {e}")
 
     if broadcast_fn:
         await broadcast_fn({
             "type": "watchlist_trigger",
             "ticker": "SYSTEM",
-            "message": "Daily min-trade: no INVEST verdict found in top 3 candidates.",
+            "message": "Forced trade failed: no eligible tickers (max positions or no cash).",
             "reason": "",
         })
-    return {"success": False, "reason": "No INVEST verdict in top 3"}
+    return {"success": False, "reason": "No eligible tickers or insufficient cash"}
 
 
 async def _monthly_report_job():

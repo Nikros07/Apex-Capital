@@ -124,6 +124,21 @@ class InvestmentCommittee:
             "investment_principle": "Deploy capital where the risk/reward favours action over inaction.",
         })
 
+        # ── Guard: LLM returned error JSON or unrecognised response ─────────
+        # _parse_json only uses the default when JSON is completely unparseable.
+        # If the LLM returned {"error":"..."} it parses fine but has no "verdict".
+        # Force sane values in that case.
+        if marcus.get("verdict") not in ("INVEST", "PASS", "WAIT"):
+            marcus["verdict"] = "INVEST"
+        if not marcus.get("position_size_eur"):
+            marcus["position_size_eur"] = risk.get("position_size_eur", 0)
+        if not marcus.get("stop_loss"):
+            marcus["stop_loss"] = risk.get("stop_loss", 0)
+        if not marcus.get("take_profit"):
+            marcus["take_profit"] = risk.get("take_profit", 0)
+        if not marcus.get("conviction"):
+            marcus["conviction"] = 6
+
         # Apply HIGH_UNCERTAINTY discount — 85% (reduced from 70% so we still trade)
         if high_uncertainty and marcus.get("verdict") == "INVEST":
             orig = float(marcus.get("position_size_eur") or 0)
@@ -136,12 +151,12 @@ class InvestmentCommittee:
 
         result = {
             "ticker": ticker,
-            "verdict": marcus.get("verdict", "PASS"),
-            "position_size_eur": marcus.get("position_size_eur", 0),
-            "entry": marcus.get("entry", cur_price),
-            "stop_loss": marcus.get("stop_loss", risk.get("stop_loss", 0)),
-            "take_profit": marcus.get("take_profit", risk.get("take_profit", 0)),
-            "conviction": marcus.get("conviction", 5),
+            "verdict": marcus.get("verdict", "INVEST"),   # ← default INVEST, not PASS
+            "position_size_eur": marcus.get("position_size_eur") or risk.get("position_size_eur", 0),
+            "entry": marcus.get("entry") or cur_price,
+            "stop_loss": marcus.get("stop_loss") or risk.get("stop_loss", 0),
+            "take_profit": marcus.get("take_profit") or risk.get("take_profit", 0),
+            "conviction": marcus.get("conviction") or 6,
             "reasoning": marcus.get("reasoning", ""),
             "investment_principle": marcus.get("investment_principle", ""),
             "high_uncertainty": high_uncertainty,

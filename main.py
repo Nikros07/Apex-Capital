@@ -208,11 +208,14 @@ async def analyze_ticker(req: AnalyzeRequest):
 
 
 async def _delayed_startup_scan():
-    """Run one watchlist scan 90s after startup so the fund isn't idle on fresh deploy."""
+    """
+    90s after startup: run deep scan (scores all tickers, analyzes top 10,
+    falls back to forced trade) — guarantees at least 1 trade on fresh deploy.
+    """
     await asyncio.sleep(90)
     try:
-        from core.scheduler import run_watchlist_scan
-        await run_watchlist_scan(get_cio(), get_pm(), broadcast)
+        from core.scheduler import run_deep_scan
+        await run_deep_scan(get_cio(), get_pm(), broadcast)
     except Exception as e:
         print(f"[Startup scan] Error: {e}")
 
