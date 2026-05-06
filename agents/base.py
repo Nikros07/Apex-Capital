@@ -50,10 +50,11 @@ class BaseAgent:
                        max_retries: int = 3) -> str:
         full_system = f"{self.personality_header}\n\n{system_prompt}"
 
-        # Try every free model in rotation — move to next on 429 / error
+        # Try every free model once — move to next on rate-limit / error
+        # Cap at len(FREE_MODELS) unique attempts to keep pipeline fast
         model_index = 0
 
-        for attempt in range(max_retries * len(FREE_MODELS)):
+        for attempt in range(len(FREE_MODELS)):
             key = self.km.get_key(self.name)
             if key == "__no_key__":
                 return json.dumps({"error": "No OpenRouter API key configured. Add OPENROUTER_KEY_1 in Railway Variables."})
@@ -61,7 +62,7 @@ class BaseAgent:
             model = FREE_MODELS[model_index % len(FREE_MODELS)]
 
             try:
-                async with httpx.AsyncClient(timeout=60.0) as client:
+                async with httpx.AsyncClient(timeout=30.0) as client:
                     resp = await client.post(
                         OPENROUTER_URL,
                         headers={
@@ -153,9 +154,7 @@ class BaseAgent:
                                 "url": "",
                             })
                         return results
-                    # 402 = out of credits, 429 = rate limit → fall through to DDG
-                    if resp.status_code not in (402, 429):
-                        return []  # unexpected error, skip search
+                    # Any non-200 (402 credits, 429 rate limit, 5xx, etc.) → DDG
             except Exception:
                 pass
 
