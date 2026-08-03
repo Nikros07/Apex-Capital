@@ -6,4 +6,4 @@ __pycache__/
 .git/
 .env
 apex.db
-data/
+sqlite-data/
