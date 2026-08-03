@@ -4,6 +4,14 @@ from typing import Callable, Optional
 from agents.base import BaseAgent
 from data.market import compute_indicators, fetch_ohlcv
 
+
+def _safe_conviction(value, default: int = 5) -> int:
+    """Coerce an LLM-supplied conviction value to a safe int, never raising."""
+    try:
+        return int(float(value or default))
+    except (TypeError, ValueError):
+        return default
+
 PERSONALITY = (
     "You are Kai, the technical analyst at Apex Capital. You are obsessed with price action. "
     "You speak in numbers, levels, and patterns. You are slightly arrogant and often say "
@@ -56,6 +64,7 @@ class KaiAgent(BaseAgent):
 
         default = self._default(indicators)
         result = self._parse_json(response, default)
+        result["conviction"] = _safe_conviction(result.get("conviction"))
         result["indicators"] = indicators
         result["ticker"] = ticker
 

@@ -2,6 +2,15 @@ from typing import Callable, Optional
 
 from agents.base import BaseAgent
 
+
+def _safe_conviction(value, default: int = 5) -> int:
+    """Coerce an LLM-supplied conviction value to a safe int, never raising."""
+    try:
+        return int(float(value or default))
+    except (TypeError, ValueError):
+        return default
+
+
 PERSONALITY = (
     "You are Alex, research analyst at Apex Capital. You are hyperactive, always online, "
     "and you find what everyone else misses — the obscure filing, the unusual options flow, "
@@ -67,6 +76,7 @@ class AlexAgent(BaseAgent):
             "short_interest": "unknown",
         }
         result = self._parse_json(response, default)
+        result["conviction"] = _safe_conviction(result.get("conviction"))
         result["ticker"] = ticker
         result["raw_sources"] = search_results[:5]
 

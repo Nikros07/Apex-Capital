@@ -6,6 +6,14 @@ from data.market import fetch_current_price
 from utils.db import get_portfolio, insert_trade, update_portfolio
 
 
+def _safe_conviction(value, default: int = 5) -> int:
+    """Coerce an LLM-supplied conviction value to a safe int, never raising."""
+    try:
+        return int(float(value or default))
+    except (TypeError, ValueError):
+        return default
+
+
 class PortfolioManager:
     INITIAL_VALUE    = 10_000.0
     MAX_POSITIONS    = 15          # up to 15 open positions simultaneously
@@ -41,7 +49,7 @@ class PortfolioManager:
         stop_loss         = float(committee.get("stop_loss") or risk.get("stop_loss") or 0)
         take_profit       = float(committee.get("take_profit") or risk.get("take_profit") or 0)
         rr_ratio          = float(risk.get("rr_ratio") or 0)
-        conviction        = int(float(committee.get("conviction") or 5))
+        conviction        = _safe_conviction(committee.get("conviction"))
         atr               = float(risk.get("atr") or current_price * 0.02)
 
         if current_price <= 0 or position_size_eur <= 0:
@@ -88,6 +96,7 @@ class PortfolioManager:
             "pnl_pct":         0.0,
             "partial_tp_done": False,
             "entry_time":      datetime.utcnow().isoformat(),
+            "entry_signals":   reports,
         }
 
         total_value, peak, max_dd = self._recalc(new_cash, positions, portfolio)
@@ -130,6 +139,7 @@ class PortfolioManager:
         pos        = positions[ticker]
         shares     = float(pos["shares"])
         entry_price = float(pos["entry_price"])
+        entry_signals = pos.get("entry_signals", {})
 
         sale_value = shares * current_price
         pnl_eur    = (current_price - entry_price) * shares
@@ -151,7 +161,7 @@ class PortfolioManager:
             "stop_loss":        pos.get("stop_loss"), "take_profit": pos.get("take_profit"),
             "rr_ratio":         0, "conviction": 0,
             "close_reason":     reason, "pnl_eur": round(pnl_eur, 2),
-            "all_agent_signals": {},
+            "all_agent_signals": entry_signals,
         })
 
         await self._broadcast("trade_executed", {
@@ -186,6 +196,7 @@ class PortfolioManager:
         total_shares  = float(pos["shares"])
         shares_sell   = round(total_shares * 0.60, 6)
         shares_keep   = round(total_shares - shares_sell, 6)
+        entry_signals = pos.get("entry_signals", {})
 
         if shares_keep <= 0:
             return await self.execute_sell(ticker, price, "TAKE_PROFIT")
@@ -226,7 +237,7 @@ class PortfolioManager:
             "rr_ratio":         0, "conviction": 0,
             "close_reason":     "PARTIAL_TAKE_PROFIT",
             "pnl_eur":          round(pnl_eur, 2),
-            "all_agent_signals": {},
+            "all_agent_signals": entry_signals,
         })
 
         await self._broadcast("trade_executed", {

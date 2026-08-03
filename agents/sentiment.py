@@ -30,7 +30,7 @@ class JordanAgent(BaseAgent):
             fetch_stocktwits_sentiment(ticker),
         )
 
-        meme_risk = reddit_data.get("total_mentions", 0) > 50
+        meme_risk = reddit_data.get("total_mentions", 0) > 10
         top_post_title = (
             reddit_data.get("top_post", {}).get("title", "N/A")
             if reddit_data.get("top_post") else "N/A"
@@ -63,7 +63,7 @@ class JordanAgent(BaseAgent):
             f"bearish={st_data.get('bear_pct',0)}%, neutral={st_data.get('neutral_pct',0)}%, "
             f"count={st_data.get('message_count',0)}\n"
             f"Top msg: {top_msg_body}\n\n"
-            f"{'WSB mentions >50 — MEME RISK ACTIVE' if meme_risk else 'No meme risk'}\n\n"
+            f"{'WSB mentions >10 — MEME RISK ACTIVE' if meme_risk else 'No meme risk'}\n\n"
             "What does the crowd say?"
         )
 

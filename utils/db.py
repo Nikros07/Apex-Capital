@@ -136,10 +136,75 @@ class _TursoConn:
         self._raw.close()
 
 
+# ─── Turso: reuse a single module-level connection ───────────────────────────
+# Against a remote Turso database, opening a brand-new connection on every
+# get_conn() call pays a full network round-trip each time (monitor_positions
+# alone makes several such calls per open position, every 5 minutes). Local
+# SQLite is untouched below — a fresh connection there is free/correct.
+_turso_conn = None
+
+
+def _get_turso_conn():
+    global _turso_conn
+    if _turso_conn is None:
+        _turso_conn = _TursoConn(libsql.connect(TURSO_URL, auth_token=TURSO_TOKEN))
+    return _turso_conn
+
+
+class _TursoConnHandle:
+    """Context-manager wrapper around the shared Turso connection.
+
+    Reuses the module-level connection across calls (avoiding a fresh
+    network round-trip per query), but reconnects once and retries if the
+    remote connection has dropped. Exposes the same execute/executescript/
+    commit/rollback/close surface as the local sqlite3 path expects, but
+    close() is a no-op here — the underlying connection stays open for the
+    next get_conn() call.
+    """
+
+    def __init__(self):
+        self._conn = _get_turso_conn()
+
+    def execute(self, sql, params=()):
+        global _turso_conn
+        try:
+            return self._conn.execute(sql, params)
+        except Exception:
+            # Remote connection may have dropped — reconnect once and retry.
+            try:
+                self._conn.close()
+            except Exception:
+                pass
+            _turso_conn = None
+            self._conn = _get_turso_conn()
+            return self._conn.execute(sql, params)
+
+    def executescript(self, script: str):
+        return self._conn.executescript(script)
+
+    def commit(self):
+        global _turso_conn
+        try:
+            self._conn.commit()
+        except Exception:
+            # Connection likely dropped mid-transaction — drop the shared
+            # handle so the next get_conn() call reconnects from scratch.
+            _turso_conn = None
+            raise
+
+    def rollback(self):
+        self._conn.rollback()
+
+    def close(self):
+        # Intentionally a no-op: the shared connection is kept open and
+        # reused by the next get_conn() call instead of being torn down.
+        pass
+
+
 @contextmanager
 def get_conn():
     if USE_TURSO:
-        conn = _TursoConn(libsql.connect(TURSO_URL, auth_token=TURSO_TOKEN))
+        conn = _TursoConnHandle()
     else:
         raw = sqlite3.connect(DB_PATH, timeout=10)
         raw.row_factory = sqlite3.Row

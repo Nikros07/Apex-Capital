@@ -3,6 +3,14 @@ from typing import Callable, Optional
 
 from agents.base import BaseAgent
 
+
+def _safe_conviction(value, default: int = 5) -> int:
+    """Coerce an LLM-supplied conviction value to a safe int, never raising."""
+    try:
+        return int(float(value or default))
+    except (TypeError, ValueError):
+        return default
+
 LEO_PERSONALITY = (
     "You are Leo, the eternal optimist on the investment committee at Apex Capital. "
     "You always find a reason to buy. You believe in growth and human progress. "
@@ -85,8 +93,8 @@ class InvestmentCommittee:
             "key_points": ["Macro headwinds", "Valuation stretched", "Execution risk"],
         })
 
-        leo_conv = int(float(leo.get("conviction") or 5))
-        nina_conv = int(float(nina.get("conviction") or 5))
+        leo_conv = _safe_conviction(leo.get("conviction"))
+        nina_conv = _safe_conviction(nina.get("conviction"))
         high_uncertainty = abs(leo_conv - nina_conv) > 3  # raised threshold — less hair-trigger
 
         risk = all_reports.get("risk", {})

@@ -136,43 +136,57 @@ def compute_indicators(df: pd.DataFrame) -> dict:
     volume = df["Volume"]
 
     current_price = float(close.iloc[-1])
-    rsi_val       = float(ta.momentum.RSIIndicator(close, window=14).rsi().iloc[-1])
+
+    rsi_raw = float(ta.momentum.RSIIndicator(close, window=14).rsi().iloc[-1])
+    rsi_val = rsi_raw if not (rsi_raw != rsi_raw) else 50.0
 
     ema20_series = ta.trend.EMAIndicator(close, window=20).ema_indicator()
-    ema20        = float(ema20_series.iloc[-1])
+    ema20_raw    = float(ema20_series.iloc[-1])
+    ema20        = ema20_raw if not (ema20_raw != ema20_raw) else current_price
 
     ema50 = None
     ema_crossover = "NONE"
     if len(df) >= 50:
         ema50_series = ta.trend.EMAIndicator(close, window=50).ema_indicator()
-        ema50        = float(ema50_series.iloc[-1])
+        ema50_raw    = float(ema50_series.iloc[-1])
+        ema50        = ema50_raw if not (ema50_raw != ema50_raw) else current_price
         ema20_prev   = float(ema20_series.iloc[-2])
         ema50_prev   = float(ema50_series.iloc[-2])
-        if ema20 > ema50 and ema20_prev <= ema50_prev:
-            ema_crossover = "GOLDEN_CROSS"
-        elif ema20 < ema50 and ema20_prev >= ema50_prev:
-            ema_crossover = "DEATH_CROSS"
+        if not (ema20_prev != ema20_prev) and not (ema50_prev != ema50_prev):
+            if ema20 > ema50 and ema20_prev <= ema50_prev:
+                ema_crossover = "GOLDEN_CROSS"
+            elif ema20 < ema50 and ema20_prev >= ema50_prev:
+                ema_crossover = "DEATH_CROSS"
 
-    macd_ind   = ta.trend.MACD(close)
-    macd_val   = float(macd_ind.macd().iloc[-1])
-    macd_signal = float(macd_ind.macd_signal().iloc[-1])
-    macd_diff  = float(macd_ind.macd_diff().iloc[-1])
+    macd_ind        = ta.trend.MACD(close)
+    macd_val_raw    = float(macd_ind.macd().iloc[-1])
+    macd_signal_raw = float(macd_ind.macd_signal().iloc[-1])
+    macd_diff_raw   = float(macd_ind.macd_diff().iloc[-1])
+    macd_val    = macd_val_raw if not (macd_val_raw != macd_val_raw) else 0.0
+    macd_signal = macd_signal_raw if not (macd_signal_raw != macd_signal_raw) else 0.0
+    macd_diff   = macd_diff_raw if not (macd_diff_raw != macd_diff_raw) else 0.0
 
     atr_series = ta.volatility.AverageTrueRange(high, low, close, window=14).average_true_range()
     atr_raw    = atr_series.iloc[-1]
     atr_val    = float(atr_raw) if not (atr_raw != atr_raw) else current_price * 0.02
 
-    bb         = ta.volatility.BollingerBands(close, window=20)
-    bb_upper   = float(bb.bollinger_hband().iloc[-1])
-    bb_lower   = float(bb.bollinger_lband().iloc[-1])
-    bb_mid     = float(bb.bollinger_mavg().iloc[-1])
+    bb           = ta.volatility.BollingerBands(close, window=20)
+    bb_upper_raw = float(bb.bollinger_hband().iloc[-1])
+    bb_lower_raw = float(bb.bollinger_lband().iloc[-1])
+    bb_mid_raw   = float(bb.bollinger_mavg().iloc[-1])
+    bb_upper = bb_upper_raw if not (bb_upper_raw != bb_upper_raw) else current_price
+    bb_lower = bb_lower_raw if not (bb_lower_raw != bb_lower_raw) else current_price
+    bb_mid   = bb_mid_raw if not (bb_mid_raw != bb_mid_raw) else current_price
 
     vol_avg_20  = float(volume.rolling(20).mean().iloc[-1])
     vol_current = float(volume.iloc[-1])
-    vol_ratio   = vol_current / vol_avg_20 if vol_avg_20 > 0 else 1.0
+    vol_ratio_raw = vol_current / vol_avg_20 if vol_avg_20 > 0 else 1.0
+    vol_ratio     = vol_ratio_raw if not (vol_ratio_raw != vol_ratio_raw) else 1.0
 
-    resistance = float(high.rolling(20).max().iloc[-1])
-    support    = float(low.rolling(20).min().iloc[-1])
+    resistance_raw = float(high.rolling(20).max().iloc[-1])
+    support_raw    = float(low.rolling(20).min().iloc[-1])
+    resistance = resistance_raw if not (resistance_raw != resistance_raw) else current_price
+    support    = support_raw if not (support_raw != support_raw) else current_price
 
     if ema50:
         trend = "UPTREND" if ema20 > ema50 else "DOWNTREND"

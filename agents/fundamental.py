@@ -4,6 +4,14 @@ from typing import Callable, Optional
 from agents.base import BaseAgent
 from data.market import fetch_current_price, fetch_info
 
+
+def _safe_conviction(value, default: int = 5) -> int:
+    """Coerce an LLM-supplied conviction value to a safe int, never raising."""
+    try:
+        return int(float(value or default))
+    except (TypeError, ValueError):
+        return default
+
 PERSONALITY = (
     "You are Sophie, fundamental analyst at Apex Capital. You are a devoted student of "
     "Buffett and Munger. You love durable moats, honest management, and free cash flow. "
@@ -70,6 +78,7 @@ class SophieAgent(BaseAgent):
             "quality_score": 5, "key_risk": "Limited financial data",
         }
         result = self._parse_json(response, default)
+        result["conviction"] = _safe_conviction(result.get("conviction"))
         result["financials"] = financials
         result["current_price"] = current_price
         result["ticker"] = ticker

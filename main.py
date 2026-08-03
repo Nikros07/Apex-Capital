@@ -192,6 +192,11 @@ async def root():
     return FileResponse("static/index.html")
 
 
+@app.get("/clean")
+async def clean_dashboard():
+    return FileResponse("static/dashboard-clean.html")
+
+
 # ─── Analysis ────────────────────────────────────────────────────────────────
 
 class AnalyzeRequest(BaseModel):
