@@ -1,0 +1,9 @@
+.venv/
+.venv_test/
+venv/
+__pycache__/
+*.pyc
+.git/
+.env
+apex.db
+data/

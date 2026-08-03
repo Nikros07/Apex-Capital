@@ -340,14 +340,14 @@ async def api_test_keys():
     import time
     import httpx
     from agents.base import FREE_MODELS
-    from utils.key_manager import KeyManager
+    from utils.key_manager import KeyManager, MAX_OPENROUTER_KEYS
 
     km = KeyManager.get_instance()
     results = {"keys": {}, "models": {}, "summary": {}}
 
     # Collect all configured keys
     raw_keys: dict[str, str] = {}
-    for i in range(1, 11):
+    for i in range(1, MAX_OPENROUTER_KEYS + 1):
         val = os.getenv(f"OPENROUTER_KEY_{i}", "")
         if val:
             raw_keys[f"OPENROUTER_KEY_{i}"] = val

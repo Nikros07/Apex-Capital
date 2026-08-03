@@ -2,13 +2,10 @@
 
 > Fully autonomous multi-agent AI hedge fund with simulated paper trading. Starts at €10,000.
 
-A hierarchy of AI agents with distinct personalities that research stocks independently, debate, and autonomously execute trades. No manual confirmation needed — the fund runs itself.
-
----
-
-## Live Demo
-
-Deploy to Railway in one click (see below) and open the Bloomberg terminal dashboard in your browser.
+A hierarchy of 10 AI agents with distinct personalities research stocks independently, debate,
+and autonomously execute trades. No manual confirmation needed — the fund runs itself, 24/7,
+with real market data and fake money, so you can watch how the strategy actually performs over
+time before ever risking real capital.
 
 ---
 
@@ -29,37 +26,76 @@ Deploy to Railway in one click (see below) and open the Bloomberg terminal dashb
 
 ---
 
-## Pipeline
+## Decision Pipeline
 
+Every ticker that gets analyzed — whether from a scheduled scan or a manual `/api/analyze` call —
+runs through this exact sequence (`agents/cio.py`):
+
+```mermaid
+flowchart TD
+    A[Elena — macro context] --> B[Fetch 6mo OHLCV + technical indicators]
+    B --> C1[Kai — technical]
+    B --> C2[Sophie — fundamental]
+    B --> C3[Alex — research]
+    C1 & C2 & C3 --> D[Jordan — social sentiment]
+    D --> E[Viktor — risk assessment]
+    E --> F[Committee deliberation]
+
+    subgraph F [Committee deliberation]
+        direction LR
+        F1[Leo — bull case] --> F3[Marcus — CIO verdict]
+        F2[Nina — bear case] --> F3
+    end
+
+    F --> G{Verdict}
+    G -->|INVEST| H[Dante — devil's advocate]
+    G -->|PASS / WAIT| Z[No trade]
+    H --> I[Auto-execute paper trade]
 ```
-Elena (Macro Context)
-    ↓
-yfinance OHLCV + Technical Indicators
-    ↓
-Kai + Sophie + Alex [parallel] → Jordan (Sentiment)
-    ↓
-Viktor (Risk: position size, SL, TP, R/R)
-    ↓
-Leo vs Nina → Marcus (INVEST / PASS / WAIT)
-    ↓  [if INVEST]
-Dante (Devil's Advocate — advisory warning)
-    ↓
-Auto-execute paper trade
-```
+
+**Important:** not every trade you'll see in the trade log came from this full pipeline agreeing.
+If a scheduled scan finds no `INVEST` verdict anywhere in its candidates, a **guaranteed-trade
+fallback** (`core/scheduler.py: run_forced_trade`) kicks in: it first retries the top-5
+technically-scored tickers through the LLM pipeline, and if that *still* produces nothing, it
+bypasses the LLM entirely and force-buys the highest-scored ticker using only the technical score
+and ATR-based position sizing. This exists to guarantee at least one trade per trading day for
+forward-testing purposes — worth keeping in mind when judging "how good are the AI's calls",
+since some entries are pure rule-based fallbacks, not agent conviction.
+
+---
+
+## Scheduled Jobs
+
+All times CET, Mon–Fri (`core/scheduler.py`):
+
+| Time | Job | What it does |
+|---|---|---|
+| Every 5 min, 08:00–23:00 | Position monitor | Trailing stop, partial take-profit, dead-money exit, hard stop-loss |
+| 08:00 | EU-open scan | Signal scan across the whole watchlist |
+| 08:01 | Morning briefing | Broadcasts open positions, overnight P&L, key levels |
+| 13:45 | Deep pre-market scan | Scores every ticker, **always** fully analyzes the top 10 before US open |
+| 15:30 | US-open scan | Signal scan |
+| 17:30 / 19:30 | Intraday scans | Lower volume threshold — catches unusual mid-session activity |
+| 21:00 | Pre-close scan | Signal scan |
+| 21:30 | Daily-minimum-trade enforcer | Forces a trade if none executed yet today |
+| 1st Monday, 08:00 | Monthly report | P&L summary + Marcus's narrative |
+
+Every scan additionally guarantees ≥1 trade via the fallback described above.
 
 ---
 
 ## Tech Stack
 
 - **Backend:** Python 3.11, FastAPI + uvicorn (fully async)
-- **LLM:** OpenRouter → `meta-llama/llama-3.1-8b-instruct:free`
+- **LLM:** OpenRouter free models (8 rotated) → **Gemini free tier as last-resort fallback**
+  once every OpenRouter model/key combo is rate-limited (`agents/base.py`)
 - **Market Data:** yfinance + pandas + ta
-- **Web Search:** Tavily
+- **Web Search:** Tavily → DuckDuckGo fallback
 - **Social Data:** PRAW (Reddit) + StockTwits REST API
-- **Database:** SQLite
+- **Database:** SQLite (single file, WAL mode) — see `utils/db.py`
 - **Scheduling:** APScheduler
 - **Frontend:** Vanilla JS, single `index.html`, Bloomberg terminal dark UI
-- **Deploy:** Railway
+- **Deploy:** Docker + Docker Compose, runs on any VM (see below)
 
 ---
 
@@ -81,90 +117,50 @@ Auto-execute paper trade
 git clone https://github.com/Nikros07/Apex-Capital.git
 cd Apex-Capital
 
-# Configure
 cp .env.example .env
-# Edit .env — fill in your API keys
+# edit .env — fill in your API keys (see below)
 
-# Install
 pip install -r requirements.txt
-
-# Run
 python main.py
 # → http://localhost:8000
 ```
 
-### Required API Keys
+### Required / optional API keys
 
-| Key | Source |
-|---|---|
-| `OPENROUTER_KEY_1..5` | [openrouter.ai](https://openrouter.ai) → Keys (free tier available) |
-| `TAVILY_API_KEY` | [app.tavily.com](https://app.tavily.com) |
-| `REDDIT_CLIENT_ID/SECRET` | [reddit.com/prefs/apps](https://reddit.com/prefs/apps) → create script app |
-
----
-
-## Deploy to Railway
-
-### 1 — Fork & connect
-
-1. Fork this repo on GitHub
-2. Go to [railway.app](https://railway.app) → **New Project** → **Deploy from GitHub**
-3. Select `Apex-Capital`
-
-### 2 — Add Volume (for persistent SQLite)
-
-Railway's filesystem is ephemeral. Without a volume, `apex.db` is wiped on every restart.
-
-1. Railway dashboard → your project → **+ New** → **Volume**
-2. Mount path: `/data`
-3. Set env var: `DB_PATH=/data/apex.db`
-
-### 3 — Set environment variables
-
-In Railway → your service → **Variables**, add all keys from `.env.example`:
-
-```
-OPENROUTER_KEY_1=sk-or-v1-...
-OPENROUTER_KEY_2=sk-or-v1-...
-OPENROUTER_KEY_3=sk-or-v1-...
-OPENROUTER_KEY_4=sk-or-v1-...
-OPENROUTER_KEY_5=sk-or-v1-...
-TAVILY_API_KEY=tvly-...
-REDDIT_CLIENT_ID=...
-REDDIT_CLIENT_SECRET=...
-REDDIT_USER_AGENT=ApexCapital/1.0
-WATCHLIST=AAPL,TSLA,NVDA,MSFT,SPY
-DB_PATH=/data/apex.db
-```
-
-> `PORT` is set automatically by Railway — **do not add it manually**.
-
-### 4 — Deploy
-
-Railway auto-builds via Nixpacks and deploys. Your public URL appears in the dashboard.
-
----
-
-## Scheduled Jobs
-
-| Job | Schedule | Action |
+| Key | Required? | Source |
 |---|---|---|
-| Position Monitor | Every 15 min, Mon–Fri 09:00–22:00 CET | Check SL/TP, auto-sell |
-| Daily Watchlist Scan | 09:15 CET weekdays | Signal scan → auto-analyze if triggered |
-| Monthly Report | 1st Monday 08:00 CET | P&L report + Marcus narrative |
+| `OPENROUTER_KEY_1..5` | Yes (at least 1) | [openrouter.ai](https://openrouter.ai) → Keys (free tier) |
+| `GEMINI_API_KEY` or `GEMINI_KEY_1..5` | Optional but recommended | [aistudio.google.com/apikey](https://aistudio.google.com/apikey) (free tier) — used only once every OpenRouter model is rate-limited |
+| `TAVILY_API_KEY` | Optional | [app.tavily.com](https://app.tavily.com) — falls back to DuckDuckGo if unset/exhausted |
+| `REDDIT_CLIENT_ID/SECRET` | Optional | [reddit.com/prefs/apps](https://reddit.com/prefs/apps) → create script app |
+
+---
+
+## Deploy for free, 24/7 (Docker on Oracle Cloud "Always Free")
+
+The app ships with a `Dockerfile` and `docker-compose.yml` that run identically on any host —
+a local machine, a VPS, or Oracle Cloud's permanently-free tier. To update after a `git pull`:
+
+```bash
+docker compose up -d --build
+```
+
+The SQLite database persists in `./data/apex.db` via a mounted volume, so restarts and rebuilds
+don't lose portfolio/trade history.
+
+Full step-by-step account setup and VM configuration: see the deployment guide the maintainer
+keeps outside this repo (Oracle account creation, VM shape selection, firewall rule, Docker
+install, `.env` setup).
 
 ---
 
 ## Risk Rules
 
 - Position size = 1% account risk ÷ (1.5 × ATR)
-- Stop-loss: entry − 1.5×ATR
-- Take-profit: entry + 2.5×ATR
-- Monthly drawdown >5% → halve all sizes
-- 3 consecutive losses → cooling-off, −50% sizes
-- Meme risk flag (WSB >50 posts) → −40% size
-- Contrarian flag → −15% size
-- HIGH_UNCERTAINTY (Leo/Nina conviction diff >2) → −30% size
+- Stop-loss: entry − 1.5×ATR (trailing, only moves up)
+- Take-profit: partial (60%) at entry + 2.5×ATR, remainder trails with SL moved to breakeven
+- Max 15 simultaneous positions, min 7% cash reserve
+- Dead-money exit: held ≥7 days with <1.5% gain → close
 - Viktor CRITICAL → CIO veto → forced PASS
 
 ---
@@ -175,41 +171,39 @@ Railway auto-builds via Nixpacks and deploys. Your public URL appears in the das
 apex/
 ├── main.py                  FastAPI app + WebSocket manager
 ├── agents/
-│   ├── base.py              LLM calls, Tavily search, key rotation
-│   ├── cio.py               Pipeline orchestrator
-│   ├── macro.py             Elena
-│   ├── technical.py         Kai
-│   ├── fundamental.py       Sophie
-│   ├── research.py          Alex
-│   ├── sentiment.py         Jordan
-│   ├── risk.py              Viktor
-│   ├── committee.py         Leo + Nina + Marcus
-│   └── devil.py             Dante
+│   ├── base.py               LLM calls (OpenRouter → Gemini fallback), Tavily/DDG search
+│   ├── cio.py                Pipeline orchestrator (Marcus)
+│   ├── macro.py               Elena
+│   ├── technical.py           Kai
+│   ├── fundamental.py         Sophie
+│   ├── research.py            Alex
+│   ├── sentiment.py           Jordan
+│   ├── risk.py                Viktor
+│   ├── committee.py           Leo + Nina + Marcus
+│   └── devil.py                Dante
 ├── core/
-│   ├── portfolio.py         Paper trading engine
-│   ├── scheduler.py         APScheduler jobs
-│   └── reporter.py          Monthly reports
+│   ├── portfolio.py          Paper trading engine
+│   ├── scheduler.py          APScheduler jobs + guaranteed-trade fallback
+│   └── reporter.py           Monthly reports
 ├── data/
-│   ├── market.py            yfinance + indicators
-│   ├── reddit_client.py     PRAW wrapper
-│   └── stocktwits_client.py StockTwits REST
+│   ├── market.py              yfinance + indicators
+│   ├── reddit_client.py       PRAW wrapper
+│   └── stocktwits_client.py   StockTwits REST
 ├── utils/
-│   ├── key_manager.py       Round-robin key rotation
-│   └── db.py                SQLite schema + CRUD
-├── static/index.html        Bloomberg terminal UI
-├── .env.example             Config template
-├── requirements.txt
-├── nixpacks.toml            Railway build config
-├── .python-version          Python 3.11
-├── Procfile
-└── railway.json
+│   ├── key_manager.py         Round-robin OpenRouter key rotation + Gemini fallback pool
+│   └── db.py                  SQLite schema + CRUD
+├── static/index.html          Bloomberg terminal UI
+├── Dockerfile
+├── docker-compose.yml
+├── .env.example
+└── requirements.txt
 ```
 
 ---
 
 ## Health Check
 
-`GET /health` — returns JSON with portfolio state. Used by Railway to confirm the app is running.
+`GET /health` — returns JSON with portfolio state. Used to confirm the app is running.
 
 ---
 

@@ -1,6 +1,8 @@
 import os
 from typing import Optional
 
+MAX_OPENROUTER_KEYS = 5
+
 
 def _collect_keys(prefix: str, count: int, single_var: str = "") -> list[str]:
     keys: list[str] = []
@@ -20,7 +22,7 @@ class KeyManager:
     _instance: Optional["KeyManager"] = None
 
     def __init__(self):
-        self._keys: list[str] = _collect_keys("OPENROUTER_KEY_", 5, "OPENROUTER_API_KEY")
+        self._keys: list[str] = _collect_keys("OPENROUTER_KEY_", MAX_OPENROUTER_KEYS, "OPENROUTER_API_KEY")
         if not self._keys:
             # Don't crash startup — app still serves dashboard, LLM calls return fallback responses
             print(
