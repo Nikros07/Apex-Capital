@@ -1,5 +1,4 @@
 import asyncio
-import json
 from typing import Callable, Optional
 
 from agents.base import BaseAgent

@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import asyncio
-import os
 from typing import TYPE_CHECKING, Callable, Optional
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler

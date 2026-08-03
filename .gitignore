@@ -1,5 +1,7 @@
 .env
 apex.db
+sqlite-data/
+.venv_test/
 __pycache__/
 *.pyc
 *.pyo

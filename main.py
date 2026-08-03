@@ -342,7 +342,7 @@ async def api_test_keys():
     from agents.base import FREE_MODELS
     from utils.key_manager import KeyManager, MAX_OPENROUTER_KEYS
 
-    km = KeyManager.get_instance()
+    KeyManager.get_instance()  # ensure singleton is initialized
     results = {"keys": {}, "models": {}, "summary": {}}
 
     # Collect all configured keys

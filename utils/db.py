@@ -1,13 +1,25 @@
-import sqlite3
 import json
 import os
 from datetime import datetime
 from contextlib import contextmanager
 
-# On Railway: set DB_PATH=/data/apex.db and mount a Volume at /data
-# Locally: defaults to apex.db in project root
-_DATA_DIR = "/data" if os.path.isdir("/data") else "."
-DB_PATH = os.getenv("DB_PATH", os.path.join(_DATA_DIR, "apex.db"))
+# Two backends, chosen automatically:
+#   - TURSO_DATABASE_URL set  → remote Turso (libSQL) database, for hosts with no
+#     persistent disk on the free tier (e.g. Render)
+#   - otherwise                → plain local SQLite file (Railway volume / local dev),
+#     same as before
+TURSO_URL = os.getenv("TURSO_DATABASE_URL", "").strip()
+TURSO_TOKEN = os.getenv("TURSO_AUTH_TOKEN", "").strip()
+USE_TURSO = bool(TURSO_URL)
+
+if USE_TURSO:
+    import libsql
+else:
+    import sqlite3
+    # On Railway: set DB_PATH=/data/apex.db and mount a Volume at /data
+    # Locally: defaults to apex.db in project root
+    _DATA_DIR = "/data" if os.path.isdir("/data") else "."
+    DB_PATH = os.getenv("DB_PATH", os.path.join(_DATA_DIR, "apex.db"))
 
 
 def init_db():
@@ -77,13 +89,64 @@ def init_db():
         """)
 
 
+class _TursoCursor:
+    """Normalizes libsql's cursor rows to plain dicts, matching the
+    sqlite3.Row + dict(row) pattern every query function below already uses."""
+
+    def __init__(self, raw_cursor):
+        self._raw = raw_cursor
+
+    def _to_dict(self, row):
+        if row is None or isinstance(row, dict):
+            return row
+        cols = [d[0] for d in self._raw.description]
+        return dict(zip(cols, row))
+
+    def fetchone(self):
+        return self._to_dict(self._raw.fetchone())
+
+    def fetchall(self):
+        return [self._to_dict(r) for r in self._raw.fetchall()]
+
+
+class _TursoConn:
+    """Thin adapter so the query functions below don't need to know whether
+    they're talking to local SQLite or remote Turso."""
+
+    def __init__(self, raw_conn):
+        self._raw = raw_conn
+
+    def execute(self, sql, params=()):
+        return _TursoCursor(self._raw.execute(sql, params))
+
+    def executescript(self, script: str):
+        for stmt in filter(None, (s.strip() for s in script.split(";"))):
+            self._raw.execute(stmt)
+
+    def commit(self):
+        self._raw.commit()
+
+    def rollback(self):
+        try:
+            self._raw.rollback()
+        except Exception:
+            pass
+
+    def close(self):
+        self._raw.close()
+
+
 @contextmanager
 def get_conn():
-    conn = sqlite3.connect(DB_PATH, timeout=10)
-    conn.row_factory = sqlite3.Row
-    # WAL mode: allows concurrent reads while a write is in progress
-    conn.execute("PRAGMA journal_mode=WAL")
-    conn.execute("PRAGMA synchronous=NORMAL")
+    if USE_TURSO:
+        conn = _TursoConn(libsql.connect(TURSO_URL, auth_token=TURSO_TOKEN))
+    else:
+        raw = sqlite3.connect(DB_PATH, timeout=10)
+        raw.row_factory = sqlite3.Row
+        # WAL mode: allows concurrent reads while a write is in progress
+        raw.execute("PRAGMA journal_mode=WAL")
+        raw.execute("PRAGMA synchronous=NORMAL")
+        conn = raw
     try:
         yield conn
         conn.commit()

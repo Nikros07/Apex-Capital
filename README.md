@@ -136,21 +136,28 @@ python main.py
 
 ---
 
-## Deploy for free, 24/7 (Docker on Oracle Cloud "Always Free")
+## Deploy 24/7
 
-The app ships with a `Dockerfile` and `docker-compose.yml` that run identically on any host —
-a local machine, a VPS, or Oracle Cloud's permanently-free tier. To update after a `git pull`:
+The app ships with a `Dockerfile`, so it deploys the same way on any Docker-friendly host.
 
+**Railway (recommended — simplest, ~5€/month):**
+1. Connect this repo, Railway auto-builds from the `Dockerfile` (config already in `railway.json`)
+2. Add a **Volume** mounted at `/data`
+3. Set `DB_PATH=/data/apex.db` plus the API keys from the table above
+
+**Locally / on your own server, via Docker Compose:**
 ```bash
 docker compose up -d --build
 ```
+The SQLite database persists in `./sqlite-data/apex.db` via a mounted volume, so restarts and
+rebuilds don't lose portfolio/trade history.
 
-The SQLite database persists in `./data/apex.db` via a mounted volume, so restarts and rebuilds
-don't lose portfolio/trade history.
-
-Full step-by-step account setup and VM configuration: see the deployment guide the maintainer
-keeps outside this repo (Oracle account creation, VM shape selection, firewall rule, Docker
-install, `.env` setup).
+**Render free tier (0€, more moving parts):** Render's free web services have no persistent
+disk, so the app auto-switches to a remote [Turso](https://turso.tech) database (no credit card
+required) when `TURSO_DATABASE_URL` + `TURSO_AUTH_TOKEN` are set — see `.env.example` for how to
+create one. Free services also spin down after 15 min idle, so you'll additionally need a free
+external pinger (e.g. [cron-job.org](https://cron-job.org)) hitting `/health` every ~10 minutes
+to keep it awake. A `render.yaml` blueprint is included for one-click service setup.
 
 ---
 
@@ -191,10 +198,12 @@ apex/
 │   └── stocktwits_client.py   StockTwits REST
 ├── utils/
 │   ├── key_manager.py         Round-robin OpenRouter key rotation + Gemini fallback pool
-│   └── db.py                  SQLite schema + CRUD
+│   └── db.py                  SQLite schema + CRUD (auto-switches to Turso if configured)
 ├── static/index.html          Bloomberg terminal UI
 ├── Dockerfile
-├── docker-compose.yml
+├── docker-compose.yml         Local/self-hosted Docker deploy
+├── railway.json               Railway deploy config (Dockerfile builder + healthcheck)
+├── render.yaml                Render blueprint (free-tier alternative)
 ├── .env.example
 └── requirements.txt
 ```

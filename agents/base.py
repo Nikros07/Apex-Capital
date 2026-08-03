@@ -123,7 +123,7 @@ class BaseAgent:
                 model_index += 1
                 await asyncio.sleep(1)
                 continue
-            except Exception as e:
+            except Exception:
                 model_index += 1
                 await asyncio.sleep(1)
                 continue
@@ -214,7 +214,7 @@ class BaseAgent:
         loop = asyncio.get_running_loop()
         try:
             def _ddg_sync():
-                from duckduckgo_search import DDGS
+                from ddgs import DDGS
                 with DDGS() as ddgs:
                     hits = list(ddgs.text(query, max_results=5))
                 return [

@@ -3,9 +3,7 @@ from datetime import datetime
 from typing import Callable, Optional
 
 from data.market import fetch_current_price
-from utils.db import (
-    get_portfolio, get_recent_trades, insert_trade, update_portfolio,
-)
+from utils.db import get_portfolio, insert_trade, update_portfolio
 
 
 class PortfolioManager:

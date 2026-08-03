@@ -1,0 +1,35 @@
+services:
+  - type: web
+    name: apex-capital
+    runtime: docker
+    plan: free
+    healthCheckPath: /health
+    envVars:
+      - key: PORT
+        value: 8000
+      - key: TURSO_DATABASE_URL
+        sync: false
+      - key: TURSO_AUTH_TOKEN
+        sync: false
+      - key: OPENROUTER_KEY_1
+        sync: false
+      - key: OPENROUTER_KEY_2
+        sync: false
+      - key: OPENROUTER_KEY_3
+        sync: false
+      - key: OPENROUTER_KEY_4
+        sync: false
+      - key: OPENROUTER_KEY_5
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: TAVILY_API_KEY
+        sync: false
+      - key: REDDIT_CLIENT_ID
+        sync: false
+      - key: REDDIT_CLIENT_SECRET
+        sync: false
+      - key: REDDIT_USER_AGENT
+        value: ApexCapital/1.0
+      - key: WATCHLIST
+        sync: false
