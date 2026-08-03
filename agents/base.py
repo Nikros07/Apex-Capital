@@ -10,6 +10,12 @@ from utils.key_manager import KeyManager
 
 OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
 
+# Gemini free tier — last-resort fallback once every OpenRouter model/key
+# combo above is rate-limited or unavailable. Generous free daily quota,
+# separate from OpenRouter's limits.
+GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
+GEMINI_MODELS = ["gemini-2.0-flash", "gemini-1.5-flash"]
+
 # All free-tier models on OpenRouter — no credit needed, no balance required.
 # Rotated automatically when one is rate-limited or unavailable.
 FREE_MODELS = [
@@ -122,7 +128,49 @@ class BaseAgent:
                 await asyncio.sleep(1)
                 continue
 
+        # All OpenRouter free models/keys exhausted — try Gemini before giving up.
+        gemini_result = await self._call_gemini(full_system, user_message)
+        if gemini_result is not None:
+            return gemini_result
+
         return json.dumps({"error": "all free models exhausted or rate-limited"})
+
+    async def _call_gemini(self, full_system: str, user_message: str) -> Optional[str]:
+        gemini_keys = self.km.get_gemini_keys()
+        if not gemini_keys:
+            return None
+
+        for key in gemini_keys:
+            for model in GEMINI_MODELS:
+                try:
+                    async with httpx.AsyncClient(timeout=30.0) as client:
+                        resp = await client.post(
+                            GEMINI_URL.format(model=model),
+                            params={"key": key},
+                            json={
+                                "system_instruction": {"parts": [{"text": full_system}]},
+                                "contents": [{"role": "user", "parts": [{"text": user_message}]}],
+                                "generationConfig": {"temperature": 0.7, "maxOutputTokens": 800},
+                            },
+                        )
+
+                        if resp.status_code != 200:
+                            # 429 rate-limit, 4xx/5xx — try next model/key
+                            continue
+
+                        data = resp.json()
+                        candidates = data.get("candidates") or []
+                        if not candidates:
+                            continue
+                        parts = (candidates[0].get("content") or {}).get("parts") or []
+                        content = "".join(p.get("text", "") for p in parts).strip()
+                        if content:
+                            return content
+
+                except Exception:
+                    continue
+
+        return None
 
     async def search(self, query: str) -> list[dict]:
         """

@@ -2,20 +2,25 @@ import os
 from typing import Optional
 
 
+def _collect_keys(prefix: str, count: int, single_var: str = "") -> list[str]:
+    keys: list[str] = []
+    for i in range(1, count + 1):
+        key = os.getenv(f"{prefix}{i}", "").strip()
+        # Skip empty values and placeholder values from .env.example
+        if key and not key.endswith("...") and len(key) > 20:
+            keys.append(key)
+    if not keys and single_var:
+        fallback = os.getenv(single_var, "").strip()
+        if fallback and not fallback.endswith("...") and len(fallback) > 20:
+            keys.append(fallback)
+    return keys
+
+
 class KeyManager:
     _instance: Optional["KeyManager"] = None
 
     def __init__(self):
-        self._keys: list[str] = []
-        for i in range(1, 6):
-            key = os.getenv(f"OPENROUTER_KEY_{i}", "").strip()
-            # Skip empty values and placeholder values from .env.example
-            if key and not key.endswith("...") and len(key) > 20:
-                self._keys.append(key)
-        if not self._keys:
-            fallback = os.getenv("OPENROUTER_API_KEY", "").strip()
-            if fallback and not fallback.endswith("...") and len(fallback) > 20:
-                self._keys.append(fallback)
+        self._keys: list[str] = _collect_keys("OPENROUTER_KEY_", 5, "OPENROUTER_API_KEY")
         if not self._keys:
             # Don't crash startup — app still serves dashboard, LLM calls return fallback responses
             print(
@@ -25,6 +30,14 @@ class KeyManager:
             self._keys = ["__no_key__"]
         self._agent_assignments: dict[str, str] = {}
         self._round_robin_idx: int = 0
+
+        # Gemini keys are a separate pool — used as a last-resort fallback
+        # once every free OpenRouter model/key combo is rate-limited.
+        self._gemini_keys: list[str] = _collect_keys("GEMINI_KEY_", 5, "GEMINI_API_KEY")
+        self._gemini_idx: int = 0
+
+    def get_gemini_keys(self) -> list[str]:
+        return list(self._gemini_keys)
 
     @classmethod
     def get_instance(cls) -> "KeyManager":
