@@ -13,20 +13,31 @@ OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
 # Gemini free tier — last-resort fallback once every OpenRouter model/key
 # combo above is rate-limited or unavailable. Generous free daily quota,
 # separate from OpenRouter's limits.
+# NOTE: gemini-2.0-flash and gemini-1.5-flash were retired by Google (shut
+# down) — verified against https://ai.google.dev/gemini-api/docs/models
+# on 2026-08-03 before picking this list. Re-check that page if these ever
+# start 404ing again; Google's model lifecycle here moves fast.
 GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
-GEMINI_MODELS = ["gemini-2.0-flash", "gemini-1.5-flash"]
+GEMINI_MODELS = ["gemini-2.5-flash", "gemini-2.5-flash-lite", "gemini-3.1-flash-lite"]
 
 # All free-tier models on OpenRouter — no credit needed, no balance required.
 # Rotated automatically when one is rate-limited or unavailable.
+# NOTE: OpenRouter's free-tier catalog turns over completely every so often —
+# the previous list (llama-3.1/3.2, mistral-7b, gemma-3, qwen-2.5, deepseek-r1,
+# hermes-3) was 100% dead (all HTTP 404) as of 2026-08-03. This list was
+# verified live against https://openrouter.ai/api/v1/models on that date —
+# if /api/test-keys ever shows all-404 again, refetch that endpoint and
+# filter for ids ending in ":free" rather than guessing.
 FREE_MODELS = [
-    "meta-llama/llama-3.1-8b-instruct:free",
-    "meta-llama/llama-3.2-3b-instruct:free",
-    "mistralai/mistral-7b-instruct:free",
-    "google/gemma-3-12b-it:free",
-    "google/gemma-3-4b-it:free",
-    "qwen/qwen-2.5-7b-instruct:free",
-    "deepseek/deepseek-r1:free",
-    "nousresearch/hermes-3-llama-3.1-8b:free",
+    "openai/gpt-oss-20b:free",
+    "google/gemma-4-31b-it:free",
+    "google/gemma-4-26b-a4b-it:free",
+    "nvidia/nemotron-3-super-120b-a12b:free",
+    "nvidia/nemotron-3-ultra-550b-a55b:free",
+    "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free",
+    "nvidia/nemotron-3-nano-30b-a3b:free",
+    "nvidia/nemotron-nano-9b-v2:free",
+    "inclusionai/ling-3.0-flash:free",
 ]
 MODEL = FREE_MODELS[0]  # default — overridden per-call if rate-limited
 
