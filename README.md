@@ -1,4 +1,8 @@
+<div align="center">
+
 # ▲ Apex Capital Management
+
+**Autonomous multi-agent AI hedge fund — paper trading, real market data, zero manual input**
 
 ![Python](https://img.shields.io/badge/python-3.11-3776AB?logo=python&logoColor=white)
 ![FastAPI](https://img.shields.io/badge/FastAPI-async-009688?logo=fastapi&logoColor=white)
@@ -6,16 +10,22 @@
 ![Paper Trading](https://img.shields.io/badge/trading-paper%20only-f5a623)
 ![Built with Claude Code](https://img.shields.io/badge/built%20with-Claude%20Code-b06aff)
 
-> Fully autonomous multi-agent AI hedge fund with simulated paper trading. Starts at €10,000.
+![10 Agents](https://img.shields.io/badge/agents-10-4d9fff)
+![Start Capital](https://img.shields.io/badge/start%20capital-%E2%82%AC10%2C000-00d084)
+![Automation](https://img.shields.io/badge/runs-24%2F7-00d084)
+![LLM Cost](https://img.shields.io/badge/LLM%20cost-%240-00d084)
+
+</div>
+
+<br>
 
 A hierarchy of 10 AI agents with distinct personalities research stocks independently, debate,
-and autonomously execute trades. No manual confirmation needed — the fund runs itself, 24/7,
-with real market data and fake money, so you can watch how the strategy actually performs over
-time before ever risking real capital.
+and autonomously execute trades — no manual confirmation needed. Real market data, fake money,
+so you can watch the strategy actually perform over time before ever risking real capital.
 
 ---
 
-## Agent Roster
+## The Team
 
 | Agent | Role | Personality |
 |---|---|---|
@@ -32,146 +42,129 @@ time before ever risking real capital.
 
 ---
 
-## Decision Pipeline
+## How a Decision Gets Made
 
-Every ticker that gets analyzed — whether from a scheduled scan or a manual `/api/analyze` call —
-runs through this exact sequence (`agents/cio.py`):
+Every ticker — from a scheduled scan or a manual analyze click — runs through the same pipeline:
 
 ```mermaid
 flowchart TD
-    A[Elena — macro context] --> B[Fetch 6mo OHLCV + technical indicators]
-    B --> C1[Kai — technical]
-    B --> C2[Sophie — fundamental]
-    B --> C3[Alex — research]
-    C1 & C2 & C3 --> D[Jordan — social sentiment]
-    D --> E[Viktor — risk assessment]
-    E --> F[Committee deliberation]
-
-    subgraph F [Committee deliberation]
-        direction LR
-        F1[Leo — bull case] --> F3[Marcus — CIO verdict]
-        F2[Nina — bear case] --> F3
-    end
-
+    A[Elena<br/>macro context] --> B[Market data<br/>+ indicators]
+    B --> C1[Kai<br/>technical]
+    B --> C2[Sophie<br/>fundamental]
+    B --> C3[Alex<br/>research]
+    C1 & C2 & C3 --> D[Jordan<br/>sentiment]
+    D --> E[Viktor<br/>risk]
+    E --> F{Committee}
     F --> G{Verdict}
-    G -->|INVEST| H[Dante — devil's advocate]
+    G -->|INVEST| H[Dante<br/>devil's advocate]
     G -->|PASS / WAIT| Z[No trade]
-    H --> I[Auto-execute paper trade]
+    H --> I[Auto-execute]
 
     classDef research fill:#4d9fff,stroke:#2d6fd0,color:#fff
     classDef risk fill:#f5a623,stroke:#c47f0a,color:#000
-    classDef bull fill:#00d084,stroke:#009e63,color:#000
-    classDef bear fill:#ff4466,stroke:#c22843,color:#fff
     classDef verdict fill:#b06aff,stroke:#7d3fcc,color:#fff
     classDef neutral fill:#2a2a2a,stroke:#555,color:#e8e8e8
-
     class A,B,C1,C2,C3,D research
     class E risk
-    class F1 bull
-    class F2 bear
-    class F3,G,H verdict
+    class F,G,H verdict
     class Z,I neutral
 ```
 
-**Important:** not every trade you'll see in the trade log came from this full pipeline agreeing.
-If a scheduled scan finds no `INVEST` verdict anywhere in its candidates, a **guaranteed-trade
-fallback** (`core/scheduler.py: run_forced_trade`) kicks in: it first retries the top-5
-technically-scored tickers through the LLM pipeline, and if that *still* produces nothing, it
-bypasses the LLM entirely and force-buys the highest-scored ticker using only the technical score
-and ATR-based position sizing. This exists to guarantee at least one trade per trading day for
-forward-testing purposes — worth keeping in mind when judging "how good are the AI's calls",
-since some entries are pure rule-based fallbacks, not agent conviction.
+Inside the committee, **Leo** argues the bull case, **Nina** argues the bear case, and **Marcus**
+hands down the final verdict.
+
+> Not every trade came from this pipeline agreeing — if a scan finds nothing worth investing in,
+> a guaranteed-trade fallback forces at least one trade per day using pure technical scoring, no
+> LLM involved. Worth remembering when judging "how good are the AI's calls."
 
 ---
 
-## Scheduled Jobs
+## Two Dashboards, One Bot
 
-All times CET, Mon–Fri (`core/scheduler.py`):
+Same live data, same WebSocket feed — pick whichever you like.
 
-| Time | Job | What it does |
-|---|---|---|
-| Every 1 min, 08:00–23:00 | Position monitor | Live price refresh, trailing stop, partial take-profit, dead-money exit, hard stop-loss |
-| 08:00 | EU-open scan | Signal scan across the whole watchlist |
-| 08:01 | Morning briefing | Broadcasts open positions, overnight P&L, key levels |
-| 13:45 | Deep pre-market scan | Scores every ticker, **always** fully analyzes the top 10 before US open |
-| 15:30 | US-open scan | Signal scan |
-| 17:30 / 19:30 | Intraday scans | Lower volume threshold — catches unusual mid-session activity |
-| 21:00 | Pre-close scan | Signal scan |
-| 21:30 | Daily-minimum-trade enforcer | Forces a trade if none executed yet today |
-| 1st Monday, 08:00 | Monthly report | P&L summary + Marcus's narrative |
+<div align="center">
 
-Every scan additionally guarantees ≥1 trade via the fallback described above.
+| `/` | `/clean` |
+|:---:|:---:|
+| Bloomberg-terminal dark, amber accents | Minimal black, light-blue accents |
+
+</div>
 
 ---
 
-## Tech Stack
+<details>
+<summary><b>Scheduled Jobs</b></summary>
+<br>
 
-- **Backend:** Python 3.11, FastAPI + uvicorn (fully async)
-- **LLM:** OpenRouter free models (9 rotated) → **Gemini free tier as last-resort fallback**
-  once every OpenRouter model/key combo is rate-limited (`agents/base.py`)
-- **Market Data:** yfinance + pandas + ta
+All times CET, Mon–Fri:
+
+| Time | Job |
+|---|---|
+| Every 1 min, 08:00–23:00 | Live price refresh, trailing stop, take-profit, dead-money exit |
+| 08:00 | EU-open scan |
+| 08:01 | Morning briefing |
+| 13:45 | Deep pre-market scan — always fully analyzes top 10 |
+| 15:30 | US-open scan |
+| 17:30 / 19:30 | Intraday scans |
+| 21:00 | Pre-close scan |
+| 21:30 | Daily-minimum-trade enforcer |
+| 1st Monday, 08:00 | Monthly report |
+
+</details>
+
+<details>
+<summary><b>Tech Stack</b></summary>
+<br>
+
+- **Backend:** Python 3.11, FastAPI + uvicorn, fully async
+- **LLM:** OpenRouter free models (9 rotated) → Gemini free tier as last-resort fallback
+- **Market Data:** yfinance + pandas + `ta`
 - **Web Search:** Tavily → DuckDuckGo fallback
 - **Social Data:** PRAW (Reddit) + StockTwits REST API
-- **Database:** SQLite (single file, WAL mode) — see `utils/db.py`
+- **Database:** SQLite (WAL mode), auto-switches to remote Turso if no persistent disk
 - **Scheduling:** APScheduler
-- **Frontend:** Vanilla JS, no build step, two interchangeable dashboard skins sharing the exact
-  same WebSocket/REST contract — Bloomberg terminal dark UI (`/`) and a clean black/minimal
-  light-blue-accent alternative (`/clean`)
-- **Deploy:** Docker + Docker Compose, runs on any VM (see below)
+- **Frontend:** Vanilla JS, no build step, two interchangeable dashboard skins
+- **Deploy:** Docker, runs on any Docker-friendly host
 
----
+</details>
 
-## Dashboard
-
-Two skins, same live data — pick whichever you like at `/` (terminal) or `/clean` (minimal):
-
-| Page | Description |
-|---|---|
-| **Dashboard** | Portfolio value, open positions, live agent activity feed |
-| **Analyze** | Enter ticker → live pipeline → full report with 8 sub-tabs |
-| **Portfolio** | Trade history, equity curve, win/loss chart |
-| **Reports** | Monthly reports with Marcus's narrative |
-| **Watchlist** | Auto-scan tickers on signal triggers |
-
----
-
-## Local Setup
+<details>
+<summary><b>Local Setup</b></summary>
+<br>
 
 ```bash
 git clone https://github.com/Nikros07/Apex-Capital.git
 cd Apex-Capital
 
 cp .env.example .env
-# edit .env — fill in your API keys (see below)
+# edit .env — fill in your API keys, see table below
 
 pip install -r requirements.txt
 python main.py
 # → http://localhost:8000
 ```
 
-### Required / optional API keys
-
 | Key | Required? | Source |
 |---|---|---|
-| `OPENROUTER_KEY_1..5` | Yes (at least 1) | [openrouter.ai](https://openrouter.ai) → Keys (free tier) |
-| `GEMINI_API_KEY` or `GEMINI_KEY_1..5` | Optional but recommended | [aistudio.google.com/apikey](https://aistudio.google.com/apikey) (free tier) — used only once every OpenRouter model is rate-limited |
-| `TAVILY_API_KEY` | Optional | [app.tavily.com](https://app.tavily.com) — falls back to DuckDuckGo if unset/exhausted |
-| `REDDIT_CLIENT_ID/SECRET` | Optional | [reddit.com/prefs/apps](https://reddit.com/prefs/apps) → create script app |
+| `OPENROUTER_KEY_1..5` | Yes, at least 1 | [openrouter.ai](https://openrouter.ai) → Keys (free) |
+| `GEMINI_API_KEY` | Recommended | [aistudio.google.com/apikey](https://aistudio.google.com/apikey) (free) |
+| `TAVILY_API_KEY` | Optional | [app.tavily.com](https://app.tavily.com) — falls back to DuckDuckGo |
+| `REDDIT_CLIENT_ID/SECRET` | Optional | [reddit.com/prefs/apps](https://reddit.com/prefs/apps) |
 
----
+</details>
 
-## Deploy 24/7
-
-The app ships with a `Dockerfile`, so it deploys the same way on any Docker-friendly host —
-one image, either a real persistent disk or a remote DB depending on the host:
+<details>
+<summary><b>Deploy 24/7</b></summary>
+<br>
 
 ```mermaid
 flowchart LR
-    A[Dockerfile] --> B{Persistent disk<br/>available?}
-    B -->|Yes — Railway, VPS| C[Local SQLite<br/>on a mounted Volume]
-    B -->|No — Render free tier| D[Remote Turso DB<br/>via env vars]
+    A[Dockerfile] --> B{Persistent disk?}
+    B -->|Yes| C[Local SQLite]
+    B -->|No| D[Remote Turso]
     C --> E[App]
-    D --> E[App]
+    D --> E
 
     classDef host fill:#4d9fff,stroke:#2d6fd0,color:#fff
     classDef db fill:#00d084,stroke:#009e63,color:#000
@@ -181,83 +174,59 @@ flowchart LR
     class E app
 ```
 
-**Railway (recommended — simplest, ~5€/month):**
-1. Connect this repo, Railway auto-builds from the `Dockerfile` (config already in `railway.json`)
-2. Add a **Volume** mounted at `/data`
-3. Set `DB_PATH=/data/apex.db` plus the API keys from the table above
+**Railway** (recommended, ~5€/month) — connect the repo, Railway builds from the Dockerfile
+automatically, add a Volume at `/data`, set `DB_PATH=/data/apex.db` plus your API keys.
 
-**Locally / on your own server, via Docker Compose:**
+**Docker Compose** (local / your own server):
 ```bash
 docker compose up -d --build
 ```
-The SQLite database persists in `./sqlite-data/apex.db` via a mounted volume, so restarts and
-rebuilds don't lose portfolio/trade history.
 
-**Render free tier (0€, more moving parts):** Render's free web services have no persistent
-disk, so the app auto-switches to a remote [Turso](https://turso.tech) database (no credit card
-required) when `TURSO_DATABASE_URL` + `TURSO_AUTH_TOKEN` are set — see `.env.example` for how to
-create one. Free services also spin down after 15 min idle, so you'll additionally need a free
-external pinger (e.g. [cron-job.org](https://cron-job.org)) hitting `/health` every ~10 minutes
-to keep it awake. A `render.yaml` blueprint is included for one-click service setup.
+**Render** (free, more moving parts) — no persistent disk on the free tier, so set
+`TURSO_DATABASE_URL` + `TURSO_AUTH_TOKEN` (free, no card — see `.env.example`) and add an
+external pinger (e.g. cron-job.org) hitting `/health` every ~10 min to stop it sleeping.
 
----
+</details>
 
-## Risk Rules
+<details>
+<summary><b>Risk Rules</b></summary>
+<br>
 
 - Position size = 1% account risk ÷ (1.5 × ATR)
-- Stop-loss: entry − 1.5×ATR (trailing, only moves up)
-- Take-profit: partial (60%) at entry + 2.5×ATR, remainder trails with SL moved to breakeven
-- Max 15 simultaneous positions, min 7% cash reserve
-- Dead-money exit: held ≥48h with <1.5% gain → close (auto-recycles capital into new opportunities)
-- Cash-blocked buy → auto-sells the weakest-performing open position to free capital, then retries
+- Stop-loss: entry − 1.5×ATR, trailing, only moves up
+- Take-profit: partial (60%) at entry + 2.5×ATR, remainder trails to breakeven
+- Max 15 positions, min 7% cash reserve
+- Dead-money exit: held ≥48h with <1.5% gain → close, capital recycled into new opportunities
+- Cash-blocked buy → auto-sells the weakest open position to free capital, then retries
 - Viktor CRITICAL → CIO veto → forced PASS
 
----
+</details>
 
-## Project Structure
+<details>
+<summary><b>Project Structure</b></summary>
+<br>
 
 ```
 apex/
-├── main.py                  FastAPI app + WebSocket manager
-├── agents/
-│   ├── base.py               LLM calls (OpenRouter → Gemini fallback), Tavily/DDG search
-│   ├── cio.py                Pipeline orchestrator (Marcus)
-│   ├── macro.py               Elena
-│   ├── technical.py           Kai
-│   ├── fundamental.py         Sophie
-│   ├── research.py            Alex
-│   ├── sentiment.py           Jordan
-│   ├── risk.py                Viktor
-│   ├── committee.py           Leo + Nina + Marcus
-│   └── devil.py                Dante
-├── core/
-│   ├── portfolio.py          Paper trading engine
-│   ├── scheduler.py          APScheduler jobs + guaranteed-trade fallback
-│   └── reporter.py           Monthly reports
-├── data/
-│   ├── market.py              yfinance + indicators
-│   ├── reddit_client.py       PRAW wrapper
-│   └── stocktwits_client.py   StockTwits REST
-├── utils/
-│   ├── key_manager.py         Round-robin OpenRouter key rotation + Gemini fallback pool
-│   └── db.py                  SQLite schema + CRUD (auto-switches to Turso if configured)
+├── main.py                     FastAPI app + WebSocket manager
+├── agents/                     10 personas + LLM/search plumbing
+├── core/                       Portfolio engine, scheduler, reports
+├── data/                       Market/Reddit/StockTwits clients
+├── utils/                      Key rotation, DB layer
 ├── static/
-│   ├── index.html              Bloomberg terminal UI (default, `/`)
-│   └── dashboard-clean.html    Clean minimal UI (`/clean`) — same JS/API contract
-├── Dockerfile
-├── docker-compose.yml         Local/self-hosted Docker deploy
-├── railway.json               Railway deploy config (Dockerfile builder + healthcheck)
-├── render.yaml                Render blueprint (free-tier alternative)
+│   ├── index.html              Terminal UI (default, `/`)
+│   └── dashboard-clean.html    Minimal UI (`/clean`)
+├── Dockerfile / docker-compose.yml / railway.json / render.yaml
 ├── .env.example
 └── requirements.txt
 ```
 
----
-
-## Health Check
-
-`GET /health` — returns JSON with portfolio state. Used to confirm the app is running.
+</details>
 
 ---
 
-*Built with Claude Code*
+<div align="center">
+
+`GET /health` for status · Built with [Claude Code](https://claude.com/claude-code)
+
+</div>
