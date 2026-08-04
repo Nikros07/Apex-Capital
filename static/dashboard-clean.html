@@ -233,6 +233,7 @@
   </div>
   <div id="portfolio-ticker" style="font-size:12px;display:flex;gap:20px"></div>
   <div id="clock" style="color:var(--dim);font-size:11px;margin-left:auto"></div>
+  <span id="version-badge" style="color:var(--dim);font-size:10px;margin-left:10px;opacity:.6" title="Deployed version"></span>
 </div>
 
 <!-- NAV -->
@@ -1462,6 +1463,13 @@ function updateClock() {
     const pr = await fetch('/api/portfolio');
     state.portfolio = await pr.json();
     renderDashboard();
+  } catch(_) {}
+
+  try {
+    const hr = await fetch('/health');
+    const h = await hr.json();
+    const vEl = document.getElementById('version-badge');
+    if (vEl && h.version) vEl.textContent = `v${h.version}`;
   } catch(_) {}
 
   await refreshTrades();

@@ -19,6 +19,15 @@ from utils.db import (
     init_db, remove_from_watchlist,
 )
 
+# APP_VERSION_BASE is the only thing that needs a manual bump for a
+# meaningful milestone — the git commit suffix is automatic (Railway sets
+# RAILWAY_GIT_COMMIT_SHA at deploy time), so the version shown in the UI
+# always uniquely identifies exactly which commit is actually running,
+# even if the base number is stale.
+APP_VERSION_BASE = "1.1.0"
+_GIT_SHA = os.getenv("RAILWAY_GIT_COMMIT_SHA", "")[:7]
+APP_VERSION = f"{APP_VERSION_BASE}+{_GIT_SHA}" if _GIT_SHA else f"{APP_VERSION_BASE}-dev"
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # ── Startup ──────────────────────────────────────────────────────────────
@@ -82,7 +91,7 @@ async def lifespan(app: FastAPI):
     print("[Apex] Shutdown complete.")
 
 
-app = FastAPI(title="Apex Capital Management", version="1.0.0", lifespan=lifespan)
+app = FastAPI(title="Apex Capital Management", version=APP_VERSION, lifespan=lifespan)
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
 
@@ -177,7 +186,7 @@ async def health():
     portfolio = get_portfolio()
     return JSONResponse({
         "status": "ok",
-        "version": "1.0.0",
+        "version": APP_VERSION,
         "ts": _dt.utcnow().isoformat(),
         "portfolio_value": portfolio.get("total_value", 0),
         "cash": portfolio.get("cash_eur", 0),
