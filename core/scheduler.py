@@ -26,11 +26,11 @@ def setup_scheduler(portfolio_manager: "PortfolioManager",
 
     _scheduler = AsyncIOScheduler(timezone="Europe/Berlin")
 
-    # ── Position monitoring: every 5 min, Mon–Fri 08:00–23:00 CET ───────────
+    # ── Position monitoring: every 1 min, Mon–Fri 08:00–23:00 CET ───────────
     _scheduler.add_job(
         _monitor_job,
-        CronTrigger(minute="*/5", hour="8-23", day_of_week="mon-fri"),
-        id="position_monitor", replace_existing=True, misfire_grace_time=60,
+        CronTrigger(minute="*", hour="8-23", day_of_week="mon-fri"),
+        id="position_monitor", replace_existing=True, misfire_grace_time=30,
     )
 
     # ── Morning position briefing: 08:01 CET ──────────────────────────────────
@@ -88,7 +88,7 @@ def setup_scheduler(portfolio_manager: "PortfolioManager",
     _scheduler.start()
     print(
         "[Scheduler] Started — hedge fund mode: 6 daily scans + deep pre-market scan, "
-        "5-min position monitor, 08:01 morning briefing, 21:30 daily-min-trade enforcer."
+        "1-min position monitor, 08:01 morning briefing, 21:30 daily-min-trade enforcer."
     )
     return _scheduler
 

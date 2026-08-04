@@ -70,7 +70,7 @@ All times CET, Mon–Fri (`core/scheduler.py`):
 
 | Time | Job | What it does |
 |---|---|---|
-| Every 5 min, 08:00–23:00 | Position monitor | Trailing stop, partial take-profit, dead-money exit, hard stop-loss |
+| Every 1 min, 08:00–23:00 | Position monitor | Live price refresh, trailing stop, partial take-profit, dead-money exit, hard stop-loss |
 | 08:00 | EU-open scan | Signal scan across the whole watchlist |
 | 08:01 | Morning briefing | Broadcasts open positions, overnight P&L, key levels |
 | 13:45 | Deep pre-market scan | Scores every ticker, **always** fully analyzes the top 10 before US open |
