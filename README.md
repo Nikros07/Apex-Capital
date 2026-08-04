@@ -1,21 +1,23 @@
 <div align="center">
 
-<img src="docs/banner.png" alt="Apex Capital — Autonomous AI Hedge Fund" width="100%">
+<img src="docs/banner.gif" alt="Apex Capital — Autonomous AI Hedge Fund" width="100%">
 
 <br><br>
 
-![Python](https://img.shields.io/badge/PYTHON-3.11-3776AB?style=for-the-badge&logo=python&logoColor=white)
-![FastAPI](https://img.shields.io/badge/FASTAPI-ASYNC-009688?style=for-the-badge&logo=fastapi&logoColor=white)
-![Docker](https://img.shields.io/badge/DEPLOY-DOCKER-2496ED?style=for-the-badge&logo=docker&logoColor=white)
-![Built with Claude Code](https://img.shields.io/badge/BUILT%20WITH-CLAUDE%20CODE-b06aff?style=for-the-badge)
+[![Python](https://img.shields.io/badge/PYTHON-3.11-3776AB?style=for-the-badge&logo=python&logoColor=white)](#tech-stack)
+[![FastAPI](https://img.shields.io/badge/FASTAPI-ASYNC-009688?style=for-the-badge&logo=fastapi&logoColor=white)](#tech-stack)
+[![Docker](https://img.shields.io/badge/DEPLOY-DOCKER-2496ED?style=for-the-badge&logo=docker&logoColor=white)](#deploy)
+[![Built with Claude Code](https://img.shields.io/badge/BUILT%20WITH-CLAUDE%20CODE-b06aff?style=for-the-badge)](https://claude.com/claude-code)
 
 <br>
 
-![10 Agents](https://img.shields.io/badge/AGENTS-10-4d9fff?style=for-the-badge)
-![Start Capital](https://img.shields.io/badge/START%20CAPITAL-%E2%82%AC10%2C000-00d084?style=for-the-badge)
-![Automation](https://img.shields.io/badge/RUNS-24%2F7-00d084?style=for-the-badge)
-![LLM Cost](https://img.shields.io/badge/LLM%20COST-%240-f5a623?style=for-the-badge)
-![Paper Trading](https://img.shields.io/badge/TRADING-PAPER%20ONLY-ff4466?style=for-the-badge)
+[![10 Agents](https://img.shields.io/badge/AGENTS-10-4d9fff?style=for-the-badge)](#the-team)
+[![Start Capital](https://img.shields.io/badge/START%20CAPITAL-%E2%82%AC10%2C000-00d084?style=for-the-badge)](#risk-rules)
+[![Automation](https://img.shields.io/badge/RUNS-24%2F7-00d084?style=for-the-badge)](#scheduled-jobs)
+[![LLM Cost](https://img.shields.io/badge/LLM%20COST-%240-f5a623?style=for-the-badge)](#tech-stack)
+[![Paper Trading](https://img.shields.io/badge/TRADING-PAPER%20ONLY-ff4466?style=for-the-badge)](#risk-rules)
+
+<sub>click any badge to jump to that section</sub>
 
 </div>
 
@@ -95,6 +97,7 @@ Same live data, same WebSocket feed — pick whichever you like.
 
 ---
 
+<a id="scheduled-jobs"></a>
 <details>
 <summary><b>Scheduled Jobs</b></summary>
 <br>
@@ -115,6 +118,7 @@ All times CET, Mon–Fri:
 
 </details>
 
+<a id="tech-stack"></a>
 <details>
 <summary><b>Tech Stack</b></summary>
 <br>
@@ -156,6 +160,7 @@ python main.py
 
 </details>
 
+<a id="deploy"></a>
 <details>
 <summary><b>Deploy 24/7</b></summary>
 <br>
@@ -190,6 +195,7 @@ external pinger (e.g. cron-job.org) hitting `/health` every ~10 min to stop it s
 
 </details>
 
+<a id="risk-rules"></a>
 <details>
 <summary><b>Risk Rules</b></summary>
 <br>
