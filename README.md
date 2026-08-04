@@ -1,5 +1,11 @@
 # ▲ Apex Capital Management
 
+![Python](https://img.shields.io/badge/python-3.11-3776AB?logo=python&logoColor=white)
+![FastAPI](https://img.shields.io/badge/FastAPI-async-009688?logo=fastapi&logoColor=white)
+![Docker](https://img.shields.io/badge/deploy-Docker-2496ED?logo=docker&logoColor=white)
+![Paper Trading](https://img.shields.io/badge/trading-paper%20only-f5a623)
+![Built with Claude Code](https://img.shields.io/badge/built%20with-Claude%20Code-b06aff)
+
 > Fully autonomous multi-agent AI hedge fund with simulated paper trading. Starts at €10,000.
 
 A hierarchy of 10 AI agents with distinct personalities research stocks independently, debate,
@@ -51,6 +57,20 @@ flowchart TD
     G -->|INVEST| H[Dante — devil's advocate]
     G -->|PASS / WAIT| Z[No trade]
     H --> I[Auto-execute paper trade]
+
+    classDef research fill:#4d9fff,stroke:#2d6fd0,color:#fff
+    classDef risk fill:#f5a623,stroke:#c47f0a,color:#000
+    classDef bull fill:#00d084,stroke:#009e63,color:#000
+    classDef bear fill:#ff4466,stroke:#c22843,color:#fff
+    classDef verdict fill:#b06aff,stroke:#7d3fcc,color:#fff
+    classDef neutral fill:#2a2a2a,stroke:#555,color:#e8e8e8
+
+    class A,B,C1,C2,C3,D research
+    class E risk
+    class F1 bull
+    class F2 bear
+    class F3,G,H verdict
+    class Z,I neutral
 ```
 
 **Important:** not every trade you'll see in the trade log came from this full pipeline agreeing.
@@ -87,19 +107,23 @@ Every scan additionally guarantees ≥1 trade via the fallback described above.
 ## Tech Stack
 
 - **Backend:** Python 3.11, FastAPI + uvicorn (fully async)
-- **LLM:** OpenRouter free models (8 rotated) → **Gemini free tier as last-resort fallback**
+- **LLM:** OpenRouter free models (9 rotated) → **Gemini free tier as last-resort fallback**
   once every OpenRouter model/key combo is rate-limited (`agents/base.py`)
 - **Market Data:** yfinance + pandas + ta
 - **Web Search:** Tavily → DuckDuckGo fallback
 - **Social Data:** PRAW (Reddit) + StockTwits REST API
 - **Database:** SQLite (single file, WAL mode) — see `utils/db.py`
 - **Scheduling:** APScheduler
-- **Frontend:** Vanilla JS, single `index.html`, Bloomberg terminal dark UI
+- **Frontend:** Vanilla JS, no build step, two interchangeable dashboard skins sharing the exact
+  same WebSocket/REST contract — Bloomberg terminal dark UI (`/`) and a clean black/minimal
+  light-blue-accent alternative (`/clean`)
 - **Deploy:** Docker + Docker Compose, runs on any VM (see below)
 
 ---
 
 ## Dashboard
+
+Two skins, same live data — pick whichever you like at `/` (terminal) or `/clean` (minimal):
 
 | Page | Description |
 |---|---|
@@ -138,7 +162,24 @@ python main.py
 
 ## Deploy 24/7
 
-The app ships with a `Dockerfile`, so it deploys the same way on any Docker-friendly host.
+The app ships with a `Dockerfile`, so it deploys the same way on any Docker-friendly host —
+one image, either a real persistent disk or a remote DB depending on the host:
+
+```mermaid
+flowchart LR
+    A[Dockerfile] --> B{Persistent disk<br/>available?}
+    B -->|Yes — Railway, VPS| C[Local SQLite<br/>on a mounted Volume]
+    B -->|No — Render free tier| D[Remote Turso DB<br/>via env vars]
+    C --> E[App]
+    D --> E[App]
+
+    classDef host fill:#4d9fff,stroke:#2d6fd0,color:#fff
+    classDef db fill:#00d084,stroke:#009e63,color:#000
+    classDef app fill:#b06aff,stroke:#7d3fcc,color:#fff
+    class A,B host
+    class C,D db
+    class E app
+```
 
 **Railway (recommended — simplest, ~5€/month):**
 1. Connect this repo, Railway auto-builds from the `Dockerfile` (config already in `railway.json`)
@@ -167,7 +208,8 @@ to keep it awake. A `render.yaml` blueprint is included for one-click service se
 - Stop-loss: entry − 1.5×ATR (trailing, only moves up)
 - Take-profit: partial (60%) at entry + 2.5×ATR, remainder trails with SL moved to breakeven
 - Max 15 simultaneous positions, min 7% cash reserve
-- Dead-money exit: held ≥7 days with <1.5% gain → close
+- Dead-money exit: held ≥48h with <1.5% gain → close (auto-recycles capital into new opportunities)
+- Cash-blocked buy → auto-sells the weakest-performing open position to free capital, then retries
 - Viktor CRITICAL → CIO veto → forced PASS
 
 ---
@@ -199,7 +241,9 @@ apex/
 ├── utils/
 │   ├── key_manager.py         Round-robin OpenRouter key rotation + Gemini fallback pool
 │   └── db.py                  SQLite schema + CRUD (auto-switches to Turso if configured)
-├── static/index.html          Bloomberg terminal UI
+├── static/
+│   ├── index.html              Bloomberg terminal UI (default, `/`)
+│   └── dashboard-clean.html    Clean minimal UI (`/clean`) — same JS/API contract
 ├── Dockerfile
 ├── docker-compose.yml         Local/self-hosted Docker deploy
 ├── railway.json               Railway deploy config (Dockerfile builder + healthcheck)
