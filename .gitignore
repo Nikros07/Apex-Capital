@@ -14,3 +14,6 @@ build/
 venv/
 
 test_local.py
+
+node_modules/
+package-lock.json
