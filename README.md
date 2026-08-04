@@ -1,19 +1,21 @@
 <div align="center">
 
-# ▲ Apex Capital Management
+<img src="docs/banner.png" alt="Apex Capital — Autonomous AI Hedge Fund" width="100%">
 
-**Autonomous multi-agent AI hedge fund — paper trading, real market data, zero manual input**
+<br><br>
 
-![Python](https://img.shields.io/badge/python-3.11-3776AB?logo=python&logoColor=white)
-![FastAPI](https://img.shields.io/badge/FastAPI-async-009688?logo=fastapi&logoColor=white)
-![Docker](https://img.shields.io/badge/deploy-Docker-2496ED?logo=docker&logoColor=white)
-![Paper Trading](https://img.shields.io/badge/trading-paper%20only-f5a623)
-![Built with Claude Code](https://img.shields.io/badge/built%20with-Claude%20Code-b06aff)
+![Python](https://img.shields.io/badge/PYTHON-3.11-3776AB?style=for-the-badge&logo=python&logoColor=white)
+![FastAPI](https://img.shields.io/badge/FASTAPI-ASYNC-009688?style=for-the-badge&logo=fastapi&logoColor=white)
+![Docker](https://img.shields.io/badge/DEPLOY-DOCKER-2496ED?style=for-the-badge&logo=docker&logoColor=white)
+![Built with Claude Code](https://img.shields.io/badge/BUILT%20WITH-CLAUDE%20CODE-b06aff?style=for-the-badge)
 
-![10 Agents](https://img.shields.io/badge/agents-10-4d9fff)
-![Start Capital](https://img.shields.io/badge/start%20capital-%E2%82%AC10%2C000-00d084)
-![Automation](https://img.shields.io/badge/runs-24%2F7-00d084)
-![LLM Cost](https://img.shields.io/badge/LLM%20cost-%240-00d084)
+<br>
+
+![10 Agents](https://img.shields.io/badge/AGENTS-10-4d9fff?style=for-the-badge)
+![Start Capital](https://img.shields.io/badge/START%20CAPITAL-%E2%82%AC10%2C000-00d084?style=for-the-badge)
+![Automation](https://img.shields.io/badge/RUNS-24%2F7-00d084?style=for-the-badge)
+![LLM Cost](https://img.shields.io/badge/LLM%20COST-%240-f5a623?style=for-the-badge)
+![Paper Trading](https://img.shields.io/badge/TRADING-PAPER%20ONLY-ff4466?style=for-the-badge)
 
 </div>
 
