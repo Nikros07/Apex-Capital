@@ -73,7 +73,18 @@ class PortfolioManager:
         min_cash      = total_value * self.MIN_CASH_RESERVE
         available     = cash_eur - min_cash
         if available < 10:
-            return {"success": False, "reason": "Cash below minimum reserve"}
+            # Cash is pinned at the reserve floor — free up capital by closing
+            # the weakest-performing open position, then retry once.
+            if not await self._free_capital_for_new_position():
+                return {"success": False, "reason": "Cash below minimum reserve"}
+            portfolio   = get_portfolio()
+            cash_eur    = float(portfolio.get("cash_eur", 0))
+            total_value = float(portfolio.get("total_value", self.INITIAL_VALUE))
+            positions   = dict(portfolio.get("positions", {}))
+            min_cash    = total_value * self.MIN_CASH_RESERVE
+            available   = cash_eur - min_cash
+            if available < 10:
+                return {"success": False, "reason": "Cash below minimum reserve (even after freeing capital)"}
 
         if position_size_eur > available:
             position_size_eur = available * 0.95
@@ -283,14 +294,14 @@ class PortfolioManager:
                     pos["trailing_stop"] = round(new_trail, 4)
                 effective_sl = float(pos.get("trailing_stop") or pos.get("stop_loss") or 0)
 
-                # ── Dead-money exit: >7 days, <1.5% gain ─────────────────────
+                # ── Dead-money exit: >48h, <1.5% gain ─────────────────────────
                 entry_time_str = pos.get("entry_time", "")
                 if entry_time_str:
                     try:
-                        days_held = (datetime.utcnow() - datetime.fromisoformat(entry_time_str)).days
-                        pnl_pct   = (price - entry_price) / entry_price * 100 if entry_price > 0 else 0
-                        if days_held >= 7 and pnl_pct < 1.5:
-                            await self.execute_sell(ticker, price, "DEAD_MONEY_7D")
+                        hours_held = (datetime.utcnow() - datetime.fromisoformat(entry_time_str)).total_seconds() / 3600
+                        pnl_pct    = (price - entry_price) / entry_price * 100 if entry_price > 0 else 0
+                        if hours_held >= 48 and pnl_pct < 1.5:
+                            await self.execute_sell(ticker, price, "DEAD_MONEY_48H")
                             continue
                     except Exception:
                         pass
@@ -335,6 +346,27 @@ class PortfolioManager:
         await self._broadcast("portfolio_update", {"portfolio": get_portfolio()})
 
     # ─── HELPERS ─────────────────────────────────────────────────────────────
+
+    async def _free_capital_for_new_position(self) -> bool:
+        """
+        Sell the weakest-performing open position (lowest pnl_pct) to free up
+        cash when the reserve is blocking a promising new buy. Returns True if
+        a position was sold, False if there was nothing eligible to sell.
+        """
+        portfolio = get_portfolio()
+        positions = portfolio.get("positions", {})
+        if not positions:
+            return False
+
+        weakest_ticker = min(positions, key=lambda t: positions[t].get("pnl_pct", 0))
+        price = float(positions[weakest_ticker].get("current_price") or 0)
+        if price <= 0:
+            price = await fetch_current_price(weakest_ticker)
+        if price <= 0:
+            return False
+
+        result = await self.execute_sell(weakest_ticker, price, "CAPITAL_RECYCLED")
+        return bool(result.get("success"))
 
     def _recalc(self, cash: float, positions: dict, portfolio: dict):
         pos_value = sum(

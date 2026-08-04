@@ -463,7 +463,6 @@ async def run_forced_trade(cio, portfolio_manager, broadcast_fn) -> dict:
         try:
             portfolio = get_portfolio()
             positions = dict(portfolio.get("positions", {}))
-            cash_eur = float(portfolio.get("cash_eur", 0))
             total_value = float(portfolio.get("total_value", 10000))
 
             # Skip if already held or portfolio full
@@ -479,23 +478,20 @@ async def run_forced_trade(cio, portfolio_manager, broadcast_fn) -> dict:
                     })
                 break
 
-            # Ensure enough cash
-            min_cash = total_value * 0.10
-            available = cash_eur - min_cash
-            if available < 10:
-                continue
-
             price = await fetch_current_price(ticker)
             if price <= 0:
                 continue
 
-            # Calculate position size using ATR (Viktor's formula, no LLM)
+            # Calculate position size using ATR (Viktor's formula, no LLM).
+            # Cash-reserve checking (including freeing capital from the
+            # weakest position if needed) is handled inside execute_buy() —
+            # no need to pre-check/cap against `available` here.
             df = await fetch_ohlcv(ticker, period="1mo")
             ind = compute_indicators(df) if (df is not None and not df.empty) else {}
             atr = ind.get("atr") or price * 0.02
             stop_distance = max(1.5 * atr, price * 0.03)
             raw_size = (total_value * 0.01) / stop_distance * price  # 1% risk
-            position_size_eur = min(raw_size, available * 0.95, total_value * 0.08)
+            position_size_eur = min(raw_size, total_value * 0.08)
 
             if position_size_eur < 5:
                 continue
