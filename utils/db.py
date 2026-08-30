@@ -1,6 +1,6 @@
 import json
 import os
-from datetime import datetime
+from datetime import datetime, timedelta
 from contextlib import contextmanager
 
 # Two backends, chosen automatically:
@@ -86,6 +86,9 @@ def init_db():
                 timestamp TEXT,
                 total_value REAL
             );
+
+            CREATE INDEX IF NOT EXISTS idx_snapshots_timestamp
+                ON portfolio_snapshots(timestamp);
         """)
 
 
@@ -354,9 +357,19 @@ def save_monthly_report(month: str, report_json: dict, narrative: str):
         )
 
 
-def get_portfolio_snapshots():
+def get_portfolio_snapshots(days: int = 30):
+    """
+    Bounded to the last `days` days by default. With a snapshot inserted per
+    open position on every monitor tick, this table grows fast (~13k rows in
+    the first 2 days alone) — returning the full unbounded history on every
+    request would mean loading and re-serializing more JSON on every equity
+    chart load, for datapoints from weeks ago nobody's looking at anyway.
+    """
+    cutoff = (datetime.utcnow() - timedelta(days=days)).isoformat()
     with get_conn() as conn:
         rows = conn.execute(
-            "SELECT timestamp, total_value FROM portfolio_snapshots ORDER BY timestamp"
+            "SELECT timestamp, total_value FROM portfolio_snapshots "
+            "WHERE timestamp >= ? ORDER BY timestamp",
+            (cutoff,)
         ).fetchall()
         return [dict(r) for r in rows]

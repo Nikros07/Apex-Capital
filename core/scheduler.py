@@ -26,11 +26,25 @@ def setup_scheduler(portfolio_manager: "PortfolioManager",
 
     _scheduler = AsyncIOScheduler(timezone="Europe/Berlin")
 
-    # ── Position monitoring: every 1 min, Mon–Fri 08:00–23:00 CET ───────────
+    # ── Position monitoring — split by market state to cut wasted compute ────
+    # Every position here is a US-listed ticker (NYSE/NASDAQ) — the regular
+    # session runs ~15:30-22:00 CET. Polling every minute outside that window
+    # burns CPU/RAM for prices that cannot move (market's shut), which is
+    # exactly what was driving Railway usage up. Two tiers:
+    #   - 15:00-21:59 CET: every 1 min — real trading hours, live feel intact
+    #   - 08:00-14:59 & 22:00-22:59 CET: every 15 min — pre-market/after-hours
+    #     safety net only, at 1/15th the call volume
+    # Nothing at all outside 08:00-23:00 or on weekends (day_of_week already
+    # excludes Sat/Sun on every job in this file).
     _scheduler.add_job(
         _monitor_job,
-        CronTrigger(minute="*", hour="8-23", day_of_week="mon-fri"),
-        id="position_monitor", replace_existing=True, misfire_grace_time=30,
+        CronTrigger(minute="*", hour="15-21", day_of_week="mon-fri"),
+        id="position_monitor_active", replace_existing=True, misfire_grace_time=30,
+    )
+    _scheduler.add_job(
+        _monitor_job,
+        CronTrigger(minute="*/15", hour="8-14,22", day_of_week="mon-fri"),
+        id="position_monitor_offhours", replace_existing=True, misfire_grace_time=60,
     )
 
     # ── Morning position briefing: 08:01 CET ──────────────────────────────────
@@ -88,7 +102,8 @@ def setup_scheduler(portfolio_manager: "PortfolioManager",
     _scheduler.start()
     print(
         "[Scheduler] Started — hedge fund mode: 6 daily scans + deep pre-market scan, "
-        "1-min position monitor, 08:01 morning briefing, 21:30 daily-min-trade enforcer."
+        "1-min monitor during US hours (15-22 CET) / 15-min off-hours, "
+        "08:01 morning briefing, 21:30 daily-min-trade enforcer."
     )
     return _scheduler
 
